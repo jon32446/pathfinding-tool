@@ -1,0 +1,415 @@
+/* Canvas Container */
+.canvas-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--color-bg-tertiary);
+    background-image: 
+        linear-gradient(45deg, var(--color-bg-primary) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--color-bg-primary) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--color-bg-primary) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--color-bg-primary) 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+/* Canvas Wrapper (for pan/zoom) */
+.canvas-wrapper {
+    position: absolute;
+    transform-origin: 0 0;
+    cursor: grab;
+}
+
+.canvas-wrapper.grabbing {
+    cursor: grabbing;
+}
+
+/* Map Image */
+.map-image {
+    display: block;
+    max-width: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.map-image.hidden {
+    display: none;
+}
+
+/* SVG Overlay */
+.svg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.svg-overlay * {
+    pointer-events: auto;
+}
+
+/* Waypoint Styles */
+.waypoint {
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.waypoint:hover {
+    transform: scale(1.2);
+}
+
+.waypoint-circle {
+    fill: var(--color-waypoint);
+    stroke: white;
+    stroke-width: 2;
+}
+
+.waypoint.selected .waypoint-circle {
+    fill: var(--color-waypoint-selected);
+    stroke-width: 3;
+}
+
+.waypoint.start .waypoint-circle {
+    fill: var(--color-start);
+}
+
+.waypoint.end .waypoint-circle {
+    fill: var(--color-end);
+}
+
+.waypoint.portal .waypoint-circle {
+    fill: var(--color-portal);
+}
+
+.waypoint-label {
+    font-size: 11px;
+    font-family: var(--font-family);
+    fill: var(--color-text-primary);
+    pointer-events: none;
+    text-anchor: middle;
+}
+
+/* Edge Styles */
+.edge {
+    cursor: pointer;
+}
+
+.edge-line {
+    fill: none;
+    stroke: var(--color-edge);
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-width 0.1s ease;
+}
+
+.edge:hover .edge-line {
+    stroke-width: 5;
+}
+
+.edge.selected .edge-line {
+    stroke: var(--color-edge-selected);
+    stroke-width: 5;
+}
+
+.edge.expensive .edge-line {
+    stroke: var(--color-route-expensive);
+}
+
+/* Route Styles */
+.route-line {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.route-line.primary {
+    stroke: var(--color-route-primary);
+    stroke-width: 6;
+}
+
+.route-line.alternative {
+    stroke: var(--color-route-alt);
+    stroke-width: 4;
+    stroke-dasharray: 12 6;
+}
+
+.route-line.expensive-segment {
+    stroke: var(--color-route-expensive);
+}
+
+/* Bezier Control Points */
+.control-point {
+    cursor: move;
+}
+
+.control-point-circle {
+    fill: var(--color-accent);
+    stroke: white;
+    stroke-width: 2;
+}
+
+.control-point-line {
+    stroke: var(--color-accent);
+    stroke-width: 1;
+    stroke-dasharray: 4 2;
+    pointer-events: none;
+}
+
+/* Canvas Tools (Edit Mode) */
+.canvas-tools {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 6px;
+    box-shadow: var(--shadow-md);
+}
+
+.tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tool-btn:hover:not(.active) {
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+}
+
+.tool-btn.active {
+    color: white;
+    background: var(--color-accent);
+}
+
+/* View Mode Controls */
+.view-controls {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    box-shadow: var(--shadow-md);
+    min-width: 200px;
+}
+
+.route-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.route-card {
+    padding: 10px 12px;
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid transparent;
+}
+
+.route-card.primary-route {
+    border-left-color: var(--color-route-primary);
+}
+
+.route-card.alt-route {
+    border-left-color: var(--color-route-alt);
+}
+
+.route-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.route-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.route-cost {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--color-text-primary);
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: var(--shadow-md);
+}
+
+.zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.zoom-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+}
+
+.zoom-level {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Canvas Empty State */
+.canvas-empty-state {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+}
+
+.canvas-empty-state svg {
+    color: var(--color-text-muted);
+}
+
+.canvas-empty-state h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.canvas-empty-state p {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    max-width: 280px;
+}
+
+.canvas-empty-state.hidden {
+    display: none;
+}
+
+/* Selection Rectangle */
+.selection-rect {
+    fill: rgba(99, 102, 241, 0.1);
+    stroke: var(--color-accent);
+    stroke-width: 1;
+    stroke-dasharray: 4 2;
+}
+
+/* Ghost Elements (during drag operations) */
+.ghost-edge {
+    stroke: var(--color-edge);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    pointer-events: none;
+}
+
+.ghost-waypoint {
+    fill: var(--color-waypoint);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Status Bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--statusbar-height);
+    padding: 0 12px;
+    background: var(--color-bg-tertiary);
+    border-top: 1px solid var(--color-border);
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.status-left,
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-text-secondary);
+}
+
+.status-item svg {
+    color: var(--color-success);
+}
+
+.status-divider {
+    color: var(--color-border);
+}
+
+/* Tooltip */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    color: var(--color-text-primary);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    z-index: 100;
+}
+
+[data-tooltip]:hover::after {
+    opacity: 1;
+}
