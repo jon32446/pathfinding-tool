@@ -318,8 +318,8 @@ export class ViewerController {
             alternativeRoute: result.paths[1] || null
         });
         
-        // Display routes
-        this.displayRoute(result.paths[0], result.paths[1]);
+        // Display routes with arbitrary endpoints
+        this.displayRoute(result.paths[0], result.paths[1], startSegment, endSegment);
         
         // Update UI
         this.updateRouteInfo(result.paths[0], result.paths[1]);
@@ -329,11 +329,15 @@ export class ViewerController {
      * Display routes on the canvas
      * @param {Object} primaryRoute 
      * @param {Object|null} alternativeRoute 
+     * @param {Object|null} startSegment - { point: {x,y}, waypointId }
+     * @param {Object|null} endSegment - { point: {x,y}, waypointId }
      */
-    displayRoute(primaryRoute, alternativeRoute) {
+    displayRoute(primaryRoute, alternativeRoute, startSegment = null, endSegment = null) {
         this.renderer.renderRoutes(
             primaryRoute ? primaryRoute.path : null,
-            alternativeRoute ? alternativeRoute.path : null
+            alternativeRoute ? alternativeRoute.path : null,
+            startSegment,
+            endSegment
         );
     }
     

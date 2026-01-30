@@ -529,10 +529,12 @@ export class CanvasRenderer {
     
     /**
      * Render route paths
-     * @param {Object[]} primaryRoute - Primary route edges
-     * @param {Object[]} alternativeRoute - Alternative route edges
+     * @param {string[]} primaryRoute - Primary route waypoint IDs
+     * @param {string[]} alternativeRoute - Alternative route waypoint IDs
+     * @param {Object|null} startSegment - { point: {x,y}, waypointId }
+     * @param {Object|null} endSegment - { point: {x,y}, waypointId }
      */
-    renderRoutes(primaryRoute, alternativeRoute) {
+    renderRoutes(primaryRoute, alternativeRoute, startSegment = null, endSegment = null) {
         clearElement(this.routesGroup);
         
         const map = this.store.getCurrentMap();
@@ -551,6 +553,31 @@ export class CanvasRenderer {
         if (primaryRoute && primaryRoute.length > 0) {
             const primaryPath = this.createRoutePath(primaryRoute, waypointMap, edgeMap, 'primary');
             if (primaryPath) this.routesGroup.appendChild(primaryPath);
+            
+            // Render arbitrary start/end segments
+            if (startSegment) {
+                const startWp = waypointMap.get(startSegment.waypointId);
+                if (startWp) {
+                    const segmentPath = createSvgElement('path', {
+                        class: 'route-line primary arbitrary-segment',
+                        d: `M ${startSegment.point.x} ${startSegment.point.y} L ${startWp.x} ${startWp.y}`,
+                        'stroke-dasharray': '8 4'
+                    });
+                    this.routesGroup.appendChild(segmentPath);
+                }
+            }
+            
+            if (endSegment) {
+                const endWp = waypointMap.get(endSegment.waypointId);
+                if (endWp) {
+                    const segmentPath = createSvgElement('path', {
+                        class: 'route-line primary arbitrary-segment',
+                        d: `M ${endWp.x} ${endWp.y} L ${endSegment.point.x} ${endSegment.point.y}`,
+                        'stroke-dasharray': '8 4'
+                    });
+                    this.routesGroup.appendChild(segmentPath);
+                }
+            }
         }
     }
     

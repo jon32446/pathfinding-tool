@@ -481,10 +481,24 @@ export class EditorController {
                 
                 // Check if edge already exists
                 if (!edgeExists(map.edges, this.edgeStartWaypoint, hitResult.id)) {
+                    const fromWp = this.store.getWaypoint(this.edgeStartWaypoint);
+                    const toWp = this.store.getWaypoint(hitResult.id);
+                    
+                    // Calculate initial cost from terrain (if exists) or distance
+                    let initialCost = 1;
+                    if (fromWp && toWp) {
+                        // Create a temporary edge object for cost calculation
+                        const tempEdge = { type: 'straight', controlPoints: [] };
+                        initialCost = calculateEdgeTerrainCost(
+                            tempEdge, fromWp, toWp, 
+                            map.terrain, map.imageWidth, map.imageHeight
+                        );
+                    }
+                    
                     const edge = createEdge({
                         from: this.edgeStartWaypoint,
                         to: hitResult.id,
-                        cost: 1
+                        cost: initialCost
                     });
                     this.store.addEdge(edge);
                     this.store.setState({ selectedWaypoint: null, selectedEdge: edge.id });

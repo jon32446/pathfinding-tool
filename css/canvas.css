@@ -151,6 +151,12 @@
     stroke: var(--color-route-expensive);
 }
 
+.route-line.arbitrary-segment {
+    stroke: var(--color-route-primary);
+    stroke-width: 4;
+    opacity: 0.8;
+}
+
 /* Bezier Control Points */
 .control-point {
     cursor: move;
