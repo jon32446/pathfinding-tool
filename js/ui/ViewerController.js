@@ -21,6 +21,8 @@ export class ViewerController {
         this.pathfinder = pathfinder;
         
         this.isActive = false;
+        this.isPanning = false;
+        this.panStartedOnWaypoint = false;
     }
     
     /**
@@ -53,8 +55,11 @@ export class ViewerController {
     setupEventListeners() {
         const container = $('canvasContainer');
         
-        container.addEventListener('click', (e) => this.handleClick(e));
+        container.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         container.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+        
+        document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
         
         // State changes
         this.eventBus.on('state:change', ({ changedKeys }) => {
@@ -73,10 +78,10 @@ export class ViewerController {
     }
     
     /**
-     * Handle click on canvas
+     * Handle mouse down on canvas
      * @param {MouseEvent} e 
      */
-    handleClick(e) {
+    handleMouseDown(e) {
         if (!this.isActive) return;
         if (e.button !== 0) return;
         
@@ -90,8 +95,46 @@ export class ViewerController {
             pointInCircle(canvasPos.x, canvasPos.y, wp.x, wp.y, WAYPOINT_HIT_RADIUS)
         );
         
-        if (!clickedWaypoint) return;
-        
+        if (clickedWaypoint) {
+            // Clicked on a waypoint - handle route selection
+            this.panStartedOnWaypoint = true;
+            this.handleWaypointClick(clickedWaypoint);
+        } else {
+            // Clicked on empty space - start panning
+            this.panStartedOnWaypoint = false;
+            this.isPanning = true;
+            this.renderer.startPan(e.clientX, e.clientY);
+        }
+    }
+    
+    /**
+     * Handle mouse move
+     * @param {MouseEvent} e 
+     */
+    handleMouseMove(e) {
+        if (!this.isActive) return;
+        if (this.isPanning) {
+            this.renderer.updatePan(e.clientX, e.clientY);
+        }
+    }
+    
+    /**
+     * Handle mouse up
+     * @param {MouseEvent} e 
+     */
+    handleMouseUp(e) {
+        if (!this.isActive) return;
+        if (this.isPanning) {
+            this.isPanning = false;
+            this.renderer.endPan();
+        }
+    }
+    
+    /**
+     * Handle waypoint click for route selection
+     * @param {Object} clickedWaypoint 
+     */
+    handleWaypointClick(clickedWaypoint) {
         const state = this.store.getState();
         
         // First click sets start, second sets end

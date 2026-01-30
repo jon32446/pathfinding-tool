@@ -92,6 +92,11 @@ export class CanvasRenderer {
             }
         });
         
+        // Prevent native image drag
+        this.container.addEventListener('dragstart', (e) => {
+            e.preventDefault();
+        });
+        
         // Space + drag pan (handled by EditorController)
         
         document.addEventListener('mousemove', (e) => {
@@ -121,9 +126,13 @@ export class CanvasRenderer {
         this.eventBus.on('waypoint:updated', () => this.renderWaypoints());
         this.eventBus.on('waypoint:deleted', () => this.renderWaypoints());
         this.eventBus.on('edge:added', () => this.renderEdges());
-        this.eventBus.on('edge:updated', () => this.renderEdges());
+        this.eventBus.on('edge:updated', () => {
+            this.renderEdges();
+            this.updateSelection(); // Refresh control points if edge type changed
+        });
         this.eventBus.on('edge:deleted', () => this.renderEdges());
         this.eventBus.on('selection:changed', () => this.updateSelection());
+        this.eventBus.on('route:changed', () => this.updateSelection());
         
         // Zoom events
         this.eventBus.on('zoom:in', () => this.zoom(ZOOM_STEP));

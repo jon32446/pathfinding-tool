@@ -88,6 +88,12 @@ export class StateStore {
                     edge: this.state.selectedEdge
                 });
             }
+            if (changedKeys.includes('routeStart') || changedKeys.includes('routeEnd')) {
+                this.eventBus.emit('route:changed', {
+                    start: this.state.routeStart,
+                    end: this.state.routeEnd
+                });
+            }
             if (changedKeys.includes('maps')) {
                 this.eventBus.emit('maps:updated', this.state.maps);
             }

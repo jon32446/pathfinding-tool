@@ -79,8 +79,8 @@ class App {
         // Set up auto-save
         this.storage.enableAutoSave();
         
-        // Initialize edit mode (activates editor controller)
-        this.handleModeChange('edit');
+        // Initialize edit mode (activate directly since state already says 'edit')
+        this.editorController.activate();
         
         console.log('Map Pathfinder ready!');
     }
