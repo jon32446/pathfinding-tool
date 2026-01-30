@@ -196,6 +196,12 @@
     font-family: var(--font-mono);
 }
 
+.property-hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-left: 6px;
+}
+
 /* Property Actions */
 .property-actions {
     display: flex;

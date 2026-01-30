@@ -260,6 +260,31 @@ export class StateStore {
     }
     
     /**
+     * Update terrain layer for the current map
+     * @param {import('../models/Terrain.js').TerrainLayer} terrain 
+     */
+    setTerrain(terrain) {
+        const map = this.getCurrentMap();
+        if (!map) return;
+        
+        const updatedMap = {
+            ...map,
+            terrain
+        };
+        this.setMap(updatedMap);
+        this.eventBus.emit('terrain:updated', terrain);
+    }
+    
+    /**
+     * Get terrain layer for the current map
+     * @returns {import('../models/Terrain.js').TerrainLayer|null}
+     */
+    getTerrain() {
+        const map = this.getCurrentMap();
+        return map ? map.terrain : null;
+    }
+    
+    /**
      * Get a waypoint by ID from the current map
      * @param {string} waypointId 
      * @returns {import('../models/Waypoint.js').WaypointData|null}

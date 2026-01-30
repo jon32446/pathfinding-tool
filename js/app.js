@@ -216,6 +216,9 @@ class App {
                 case 'e':
                     this.eventBus.emit('tool:select', 'edge');
                     break;
+                case 't':
+                    this.eventBus.emit('tool:select', 'paint');
+                    break;
             }
         }
         

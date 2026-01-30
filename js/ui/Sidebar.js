@@ -4,6 +4,7 @@
 
 import { $, clearElement, createElement, show, hide } from '../utils/dom.js';
 import { getMapTree } from '../models/Map.js';
+import { calculateEdgeTerrainCost } from '../models/Terrain.js';
 
 export class Sidebar {
     /**
@@ -235,6 +236,8 @@ export class Sidebar {
         
         const fromWp = this.store.getWaypoint(edge.from);
         const toWp = this.store.getWaypoint(edge.to);
+        const map = this.store.getCurrentMap();
+        const hasTerrain = map && map.terrain;
         
         const panel = $('propertiesPanel');
         panel.innerHTML = `
@@ -254,7 +257,14 @@ export class Sidebar {
                 <div class="property-row">
                     <label class="property-label">Cost</label>
                     <div class="property-value">
-                        <input type="number" id="propEdgeCost" value="${edge.cost}" min="0" step="0.1">
+                        <input type="number" id="propEdgeCost" value="${edge.cost}" min="0" step="0.1" ${!edge.costOverride && hasTerrain ? 'disabled' : ''}>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <label class="property-label">Override</label>
+                    <div class="property-value">
+                        <input type="checkbox" id="propCostOverride" ${edge.costOverride ? 'checked' : ''}>
+                        <span class="property-hint">${edge.costOverride ? 'Manual' : 'Auto from terrain'}</span>
                     </div>
                 </div>
                 <div class="property-row">
@@ -269,10 +279,13 @@ export class Sidebar {
                 </div>
             </div>
             <div class="property-actions">
-                <button class="btn btn-secondary" id="propToggleBezier">
-                    ${edge.type === 'bezier' ? 'Make Straight' : 'Make Curved'}
+                <button class="btn btn-secondary btn-sm" id="propRecalcCost" ${!hasTerrain ? 'disabled' : ''}>
+                    Recalc Cost
                 </button>
-                <button class="btn btn-secondary" id="propDeleteEdge">Delete</button>
+                <button class="btn btn-secondary btn-sm" id="propToggleBezier">
+                    ${edge.type === 'bezier' ? 'Straight' : 'Curve'}
+                </button>
+                <button class="btn btn-secondary btn-sm" id="propDeleteEdge">Delete</button>
             </div>
         `;
         
@@ -280,7 +293,27 @@ export class Sidebar {
         $('propEdgeCost').addEventListener('change', (e) => {
             const cost = parseFloat(e.target.value);
             if (!isNaN(cost) && cost >= 0) {
-                this.store.updateEdge(edgeId, { cost });
+                this.store.updateEdge(edgeId, { cost, costOverride: true });
+            }
+        });
+        
+        $('propCostOverride').addEventListener('change', (e) => {
+            const override = e.target.checked;
+            if (!override && hasTerrain && fromWp && toWp) {
+                // Recalculate cost from terrain
+                const newCost = calculateEdgeTerrainCost(edge, fromWp, toWp, map.terrain, map.imageWidth, map.imageHeight);
+                this.store.updateEdge(edgeId, { costOverride: false, cost: newCost });
+            } else {
+                this.store.updateEdge(edgeId, { costOverride: override });
+            }
+            this.showEdgeProperties(edgeId); // Re-render
+        });
+        
+        $('propRecalcCost').addEventListener('click', () => {
+            if (hasTerrain && fromWp && toWp) {
+                const newCost = calculateEdgeTerrainCost(edge, fromWp, toWp, map.terrain, map.imageWidth, map.imageHeight);
+                this.store.updateEdge(edgeId, { cost: newCost, costOverride: false });
+                this.showEdgeProperties(edgeId); // Re-render
             }
         });
         

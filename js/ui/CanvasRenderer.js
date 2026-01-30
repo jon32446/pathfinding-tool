@@ -28,7 +28,12 @@ export class CanvasRenderer {
         this.container = null;
         this.wrapper = null;
         this.mapImage = null;
+        this.terrainCanvas = null;
+        this.terrainCtx = null;
         this.svgOverlay = null;
+        
+        // Terrain visibility
+        this.showTerrain = true;
         
         // SVG groups for layering
         this.edgesGroup = null;
@@ -54,6 +59,8 @@ export class CanvasRenderer {
         this.container = $('canvasContainer');
         this.wrapper = $('canvasWrapper');
         this.mapImage = $('mapImage');
+        this.terrainCanvas = $('terrainCanvas');
+        this.terrainCtx = this.terrainCanvas.getContext('2d');
         this.svgOverlay = $('svgOverlay');
         
         // Create SVG groups for proper layering
@@ -136,6 +143,7 @@ export class CanvasRenderer {
         this.eventBus.on('edge:deleted', () => this.renderEdges());
         this.eventBus.on('selection:changed', () => this.updateSelection());
         this.eventBus.on('route:changed', () => this.updateSelection());
+        this.eventBus.on('terrain:updated', () => this.renderTerrain());
         
         // Zoom events
         this.eventBus.on('zoom:in', () => this.zoom(ZOOM_STEP));
@@ -176,10 +184,17 @@ export class CanvasRenderer {
                 viewBox: `0 0 ${map.imageWidth} ${map.imageHeight}`
             });
             
+            // Set terrain canvas size
+            this.terrainCanvas.width = map.imageWidth;
+            this.terrainCanvas.height = map.imageHeight;
+            this.terrainCanvas.style.width = map.imageWidth + 'px';
+            this.terrainCanvas.style.height = map.imageHeight + 'px';
+            
             // Hide empty state
             $('canvasEmptyState').classList.add('hidden');
             
             // Render map content
+            this.renderTerrain();
             this.renderWaypoints();
             this.renderEdges();
             
@@ -197,6 +212,7 @@ export class CanvasRenderer {
     clearCanvas() {
         this.mapImage.src = '';
         this.mapImage.classList.add('hidden');
+        this.terrainCtx.clearRect(0, 0, this.terrainCanvas.width, this.terrainCanvas.height);
         clearElement(this.edgesGroup);
         clearElement(this.routesGroup);
         clearElement(this.waypointsGroup);
@@ -217,6 +233,61 @@ export class CanvasRenderer {
         } else {
             this.clearCanvas();
         }
+    }
+    
+    /**
+     * Render the terrain layer
+     */
+    renderTerrain() {
+        const map = this.store.getCurrentMap();
+        if (!map) return;
+        
+        // Clear terrain canvas
+        this.terrainCtx.clearRect(0, 0, this.terrainCanvas.width, this.terrainCanvas.height);
+        
+        if (!map.terrain || !this.showTerrain) {
+            this.terrainCanvas.classList.add('hidden');
+            return;
+        }
+        
+        this.terrainCanvas.classList.remove('hidden');
+        
+        const terrain = map.terrain;
+        const cellWidth = map.imageWidth / terrain.gridWidth;
+        const cellHeight = map.imageHeight / terrain.gridHeight;
+        
+        // Create a lookup for terrain types
+        const typeColors = new Map(terrain.types.map(t => [t.id, t.color]));
+        
+        // Draw each cell
+        for (let y = 0; y < terrain.gridHeight; y++) {
+            for (let x = 0; x < terrain.gridWidth; x++) {
+                const index = y * terrain.gridWidth + x;
+                const typeId = terrain.grid[index];
+                
+                if (typeId) {
+                    const color = typeColors.get(typeId);
+                    if (color) {
+                        this.terrainCtx.fillStyle = color;
+                        this.terrainCtx.fillRect(
+                            x * cellWidth,
+                            y * cellHeight,
+                            cellWidth + 0.5,  // Slight overlap to avoid gaps
+                            cellHeight + 0.5
+                        );
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Toggle terrain visibility
+     * @param {boolean} visible 
+     */
+    setTerrainVisible(visible) {
+        this.showTerrain = visible;
+        this.renderTerrain();
     }
     
     /**
@@ -537,6 +608,64 @@ export class CanvasRenderer {
      */
     clearRoutes() {
         clearElement(this.routesGroup);
+    }
+    
+    /**
+     * Render arbitrary start/end points (for non-waypoint routing)
+     * @param {{x: number, y: number}|null} startPoint 
+     * @param {{x: number, y: number}|null} endPoint 
+     */
+    renderArbitraryPoints(startPoint, endPoint) {
+        // Remove any existing arbitrary point markers
+        this.svgOverlay.querySelectorAll('.arbitrary-point').forEach(el => el.remove());
+        
+        if (startPoint) {
+            const marker = createSvgElement('g', {
+                class: 'arbitrary-point arbitrary-start',
+                transform: `translate(${startPoint.x}, ${startPoint.y})`
+            });
+            
+            // Outer ring
+            marker.appendChild(createSvgElement('circle', {
+                r: 12,
+                fill: 'none',
+                stroke: 'var(--color-start)',
+                'stroke-width': 2,
+                'stroke-dasharray': '4 2'
+            }));
+            
+            // Inner dot
+            marker.appendChild(createSvgElement('circle', {
+                r: 4,
+                fill: 'var(--color-start)'
+            }));
+            
+            this.svgOverlay.appendChild(marker);
+        }
+        
+        if (endPoint) {
+            const marker = createSvgElement('g', {
+                class: 'arbitrary-point arbitrary-end',
+                transform: `translate(${endPoint.x}, ${endPoint.y})`
+            });
+            
+            // Outer ring
+            marker.appendChild(createSvgElement('circle', {
+                r: 12,
+                fill: 'none',
+                stroke: 'var(--color-end)',
+                'stroke-width': 2,
+                'stroke-dasharray': '4 2'
+            }));
+            
+            // Inner dot
+            marker.appendChild(createSvgElement('circle', {
+                r: 4,
+                fill: 'var(--color-end)'
+            }));
+            
+            this.svgOverlay.appendChild(marker);
+        }
     }
     
     /**

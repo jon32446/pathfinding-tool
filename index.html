@@ -104,6 +104,8 @@
                 <div class="canvas-wrapper" id="canvasWrapper">
                     <!-- Map image will be inserted here -->
                     <img id="mapImage" class="map-image" alt="Map" draggable="false">
+                    <!-- Canvas overlay for terrain painting -->
+                    <canvas id="terrainCanvas" class="terrain-canvas"></canvas>
                     <!-- SVG overlay for waypoints, edges, paths -->
                     <svg id="svgOverlay" class="svg-overlay"></svg>
                 </div>
@@ -128,6 +130,13 @@
                             <circle cx="19" cy="5" r="2"/>
                         </svg>
                     </button>
+                    <button class="tool-btn" data-tool="paint" title="Paint Terrain (T)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 11H5a4 4 0 0 0-4 4v1a1 1 0 0 0 1 1h20a1 1 0 0 0 1-1v-1a4 4 0 0 0-4-4z"/>
+                            <path d="M12 11V3a2 2 0 0 1 4 0v2"/>
+                        </svg>
+                    </button>
+                    <div class="tool-divider"></div>
                     <button class="tool-btn" data-tool="pan" title="Pan (Space+Drag)">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 9l-3 3 3 3"/>
@@ -139,9 +148,35 @@
                         </svg>
                     </button>
                 </div>
+                
+                <!-- Terrain Palette (shown when paint tool active) -->
+                <div class="terrain-palette hidden" id="terrainPalette">
+                    <div class="terrain-palette-header">
+                        <span>Terrain</span>
+                        <label class="terrain-toggle">
+                            <input type="checkbox" id="terrainVisibleToggle" checked>
+                            <span>Show</span>
+                        </label>
+                    </div>
+                    <div class="terrain-types" id="terrainTypes">
+                        <!-- Terrain type buttons will be populated dynamically -->
+                    </div>
+                    <div class="brush-size">
+                        <label>Brush: <span id="brushSizeValue">2</span></label>
+                        <input type="range" id="brushSizeSlider" min="1" max="10" value="2">
+                    </div>
+                    <div class="terrain-actions">
+                        <button class="btn btn-primary btn-sm" id="recalcAllCostsBtn">Recalc All Costs</button>
+                        <button class="btn btn-secondary btn-sm" id="clearTerrainBtn">Clear Terrain</button>
+                    </div>
+                </div>
 
                 <!-- View Mode Controls -->
                 <div class="view-controls hidden" id="viewControls">
+                    <div class="view-controls-hint">
+                        Click waypoints to set route.<br>
+                        <strong>Shift+click</strong> anywhere for custom start/end.
+                    </div>
                     <div class="route-info" id="routeInfo">
                         <div class="route-card primary-route hidden" id="primaryRouteCard">
                             <div class="route-header">

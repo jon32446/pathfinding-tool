@@ -7,7 +7,8 @@
 
 import { createWaypoint } from '../models/Waypoint.js';
 import { createEdge, edgeExists, convertToBezier, convertToStraight } from '../models/Edge.js';
-import { $ } from '../utils/dom.js';
+import { createTerrainLayer, paintTerrain, imageToGrid, DEFAULT_TERRAIN_TYPES, calculateEdgeTerrainCost } from '../models/Terrain.js';
+import { $, show, hide } from '../utils/dom.js';
 import { distance, distanceToLineSegment, pointInCircle } from '../utils/geometry.js';
 
 const WAYPOINT_HIT_RADIUS = 12;
@@ -36,6 +37,11 @@ export class EditorController {
         
         // Space pan state
         this.spacePressed = false;
+        
+        // Terrain painting state
+        this.isPainting = false;
+        this.selectedTerrainType = 'clear';
+        this.brushSize = 2;
     }
     
     /**
@@ -44,6 +50,7 @@ export class EditorController {
     init() {
         this.setupEventListeners();
         this.setupToolbar();
+        this.setupTerrainPalette();
     }
     
     /**
@@ -107,6 +114,115 @@ export class EditorController {
     }
     
     /**
+     * Set up terrain palette
+     */
+    setupTerrainPalette() {
+        const terrainTypes = $('terrainTypes');
+        
+        // Add eraser option first
+        const eraserBtn = document.createElement('button');
+        eraserBtn.className = 'terrain-type-btn eraser';
+        eraserBtn.dataset.terrainType = '';
+        eraserBtn.innerHTML = `
+            <span class="terrain-color-swatch" style="background: repeating-linear-gradient(45deg, #444, #444 2px, #666 2px, #666 4px);"></span>
+            <span class="terrain-type-name">Eraser</span>
+        `;
+        terrainTypes.appendChild(eraserBtn);
+        
+        // Add terrain type buttons
+        DEFAULT_TERRAIN_TYPES.forEach(type => {
+            const btn = document.createElement('button');
+            btn.className = 'terrain-type-btn';
+            btn.dataset.terrainType = type.id;
+            btn.innerHTML = `
+                <span class="terrain-color-swatch" style="background: ${type.color};"></span>
+                <span class="terrain-type-name">${type.name}</span>
+            `;
+            terrainTypes.appendChild(btn);
+        });
+        
+        // Set initial selection
+        this.updateTerrainTypeSelection();
+        
+        // Terrain type selection
+        terrainTypes.addEventListener('click', (e) => {
+            const btn = e.target.closest('.terrain-type-btn');
+            if (btn) {
+                this.selectedTerrainType = btn.dataset.terrainType || null;
+                this.updateTerrainTypeSelection();
+            }
+        });
+        
+        // Brush size slider
+        const brushSlider = $('brushSizeSlider');
+        brushSlider.addEventListener('input', (e) => {
+            this.brushSize = parseInt(e.target.value);
+            $('brushSizeValue').textContent = this.brushSize;
+        });
+        
+        // Terrain visibility toggle
+        $('terrainVisibleToggle').addEventListener('change', (e) => {
+            this.renderer.setTerrainVisible(e.target.checked);
+        });
+        
+        // Clear terrain button
+        $('clearTerrainBtn').addEventListener('click', () => {
+            if (confirm('Clear all terrain painting? This cannot be undone.')) {
+                const map = this.store.getCurrentMap();
+                if (map) {
+                    this.store.setTerrain(null);
+                }
+            }
+        });
+        
+        // Recalculate all edge costs button
+        $('recalcAllCostsBtn').addEventListener('click', () => {
+            this.recalculateAllEdgeCosts();
+        });
+    }
+    
+    /**
+     * Recalculate costs for all edges based on terrain
+     */
+    recalculateAllEdgeCosts() {
+        const map = this.store.getCurrentMap();
+        if (!map || !map.terrain) {
+            alert('No terrain painted. Paint terrain first to auto-calculate costs.');
+            return;
+        }
+        
+        const waypointMap = new Map(map.waypoints.map(wp => [wp.id, wp]));
+        let updated = 0;
+        
+        map.edges.forEach(edge => {
+            // Skip edges with manual override
+            if (edge.costOverride) return;
+            
+            const fromWp = waypointMap.get(edge.from);
+            const toWp = waypointMap.get(edge.to);
+            if (!fromWp || !toWp) return;
+            
+            const newCost = calculateEdgeTerrainCost(edge, fromWp, toWp, map.terrain, map.imageWidth, map.imageHeight);
+            if (newCost !== edge.cost) {
+                this.store.updateEdge(edge.id, { cost: newCost });
+                updated++;
+            }
+        });
+        
+        alert(`Recalculated ${updated} edge cost(s) from terrain.`);
+    }
+    
+    /**
+     * Update terrain type selection UI
+     */
+    updateTerrainTypeSelection() {
+        document.querySelectorAll('.terrain-type-btn').forEach(btn => {
+            const typeId = btn.dataset.terrainType;
+            btn.classList.toggle('active', typeId === (this.selectedTerrainType || ''));
+        });
+    }
+    
+    /**
      * Select a tool
      * @param {string} tool 
      */
@@ -123,9 +239,17 @@ export class EditorController {
             select: 'Select Tool',
             waypoint: 'Add Waypoint',
             edge: 'Add Edge',
+            paint: 'Paint Terrain',
             pan: 'Pan Tool'
         };
         $('statusTool').textContent = toolNames[tool] || 'Unknown Tool';
+        
+        // Show/hide terrain palette
+        if (tool === 'paint') {
+            show($('terrainPalette'));
+        } else {
+            hide($('terrainPalette'));
+        }
         
         // Clear edge creation when switching tools
         if (tool !== 'edge') {
@@ -169,6 +293,9 @@ export class EditorController {
             case 'edge':
                 this.handleEdgeToolClick(hitResult, canvasPos);
                 break;
+            case 'paint':
+                this.startPainting(canvasPos, map);
+                break;
         }
     }
     
@@ -181,6 +308,12 @@ export class EditorController {
         
         const state = this.store.getState();
         const canvasPos = this.renderer.screenToCanvas(e.clientX, e.clientY);
+        
+        // Handle terrain painting
+        if (this.isPainting) {
+            this.continuePainting(canvasPos);
+            return;
+        }
         
         // Handle dragging
         if (this.isDragging && this.dragTarget) {
@@ -207,6 +340,10 @@ export class EditorController {
      * @param {MouseEvent} e 
      */
     handleMouseUp(e) {
+        if (this.isPainting) {
+            this.stopPainting();
+        }
+        
         if (this.isDragging) {
             this.endDrag();
         }
@@ -662,5 +799,66 @@ export class EditorController {
             isPortal: !wp.isPortal,
             portalTargetMapId: wp.isPortal ? null : wp.portalTargetMapId
         });
+    }
+    
+    /**
+     * Start painting terrain
+     * @param {{x: number, y: number}} canvasPos 
+     * @param {Object} map 
+     */
+    startPainting(canvasPos, map) {
+        this.isPainting = true;
+        this.paintAt(canvasPos, map);
+    }
+    
+    /**
+     * Continue painting terrain
+     * @param {{x: number, y: number}} canvasPos 
+     */
+    continuePainting(canvasPos) {
+        const map = this.store.getCurrentMap();
+        if (map) {
+            this.paintAt(canvasPos, map);
+        }
+    }
+    
+    /**
+     * Stop painting terrain
+     */
+    stopPainting() {
+        this.isPainting = false;
+    }
+    
+    /**
+     * Paint terrain at a position
+     * @param {{x: number, y: number}} canvasPos 
+     * @param {Object} map 
+     */
+    paintAt(canvasPos, map) {
+        // Create terrain layer if it doesn't exist
+        let terrain = map.terrain;
+        if (!terrain) {
+            terrain = createTerrainLayer(map.imageWidth, map.imageHeight);
+        }
+        
+        // Convert canvas position to grid cell
+        const { cellX, cellY } = imageToGrid(
+            canvasPos.x, 
+            canvasPos.y, 
+            map.imageWidth, 
+            map.imageHeight, 
+            terrain
+        );
+        
+        // Paint with brush
+        const newTerrain = paintTerrain(
+            terrain, 
+            cellX, 
+            cellY, 
+            this.brushSize, 
+            this.selectedTerrainType
+        );
+        
+        this.store.setTerrain(newTerrain);
     }
 }

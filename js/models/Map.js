@@ -13,6 +13,7 @@ import { generateId } from '../utils/helpers.js';
  * @property {number} imageHeight - Original image height
  * @property {import('./Waypoint.js').WaypointData[]} waypoints - Array of waypoints
  * @property {import('./Edge.js').EdgeData[]} edges - Array of edges
+ * @property {import('./Terrain.js').TerrainLayer|null} terrain - Terrain layer (null if not painted)
  * @property {string|null} parentMapId - Parent map ID (for nested maps)
  * @property {number} createdAt - Creation timestamp
  * @property {number} updatedAt - Last update timestamp
@@ -38,6 +39,7 @@ export function createMap({ name, imageData, imageWidth, imageHeight, parentMapI
         imageHeight,
         waypoints: [],
         edges: [],
+        terrain: null,  // Created lazily when user first paints
         parentMapId,
         createdAt: now,
         updatedAt: now

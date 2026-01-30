@@ -3,9 +3,12 @@
  */
 
 import { $, show, hide } from '../utils/dom.js';
-import { pointInCircle } from '../utils/geometry.js';
+import { pointInCircle, distance } from '../utils/geometry.js';
+import { getTerrainCostAt, sampleLine } from '../models/Terrain.js';
 
 const WAYPOINT_HIT_RADIUS = 12;
+const NEARBY_WAYPOINT_RADIUS = 500; // Max distance to consider for virtual edges
+const MAX_VIRTUAL_EDGES = 3; // Max waypoints to connect arbitrary point to
 
 export class ViewerController {
     /**
@@ -23,6 +26,10 @@ export class ViewerController {
         this.isActive = false;
         this.isPanning = false;
         this.panStartedOnWaypoint = false;
+        
+        // Arbitrary start/end points (when not clicking on waypoints)
+        this.arbitraryStart = null; // { x, y } or null
+        this.arbitraryEnd = null;   // { x, y } or null
     }
     
     /**
@@ -95,6 +102,12 @@ export class ViewerController {
             pointInCircle(canvasPos.x, canvasPos.y, wp.x, wp.y, WAYPOINT_HIT_RADIUS)
         );
         
+        // Shift+click to set arbitrary point anywhere
+        if (e.shiftKey) {
+            this.handleArbitraryPointClick(canvasPos, clickedWaypoint);
+            return;
+        }
+        
         if (clickedWaypoint) {
             // Clicked on a waypoint - handle route selection
             this.panStartedOnWaypoint = true;
@@ -105,6 +118,43 @@ export class ViewerController {
             this.isPanning = true;
             this.renderer.startPan(e.clientX, e.clientY);
         }
+    }
+    
+    /**
+     * Handle arbitrary point click (Shift+click)
+     * @param {{x: number, y: number}} canvasPos 
+     * @param {Object|undefined} clickedWaypoint 
+     */
+    handleArbitraryPointClick(canvasPos, clickedWaypoint) {
+        const state = this.store.getState();
+        const hasStart = state.routeStart || this.arbitraryStart;
+        const hasEnd = state.routeEnd || this.arbitraryEnd;
+        
+        if (!hasStart) {
+            // Set start point
+            if (clickedWaypoint) {
+                this.arbitraryStart = null;
+                this.store.setState({ routeStart: clickedWaypoint.id });
+            } else {
+                this.arbitraryStart = { x: canvasPos.x, y: canvasPos.y };
+                this.store.setState({ routeStart: null });
+            }
+        } else if (!hasEnd) {
+            // Set end point
+            if (clickedWaypoint) {
+                this.arbitraryEnd = null;
+                this.store.setState({ routeEnd: clickedWaypoint.id });
+            } else {
+                this.arbitraryEnd = { x: canvasPos.x, y: canvasPos.y };
+                this.store.setState({ routeEnd: null });
+            }
+        } else {
+            // Both set, clicking again clears
+            this.clearRoute();
+        }
+        
+        this.updateFindRouteButton();
+        this.renderer.renderArbitraryPoints(this.arbitraryStart, this.arbitraryEnd);
     }
     
     /**
@@ -136,16 +186,24 @@ export class ViewerController {
      */
     handleWaypointClick(clickedWaypoint) {
         const state = this.store.getState();
+        const hasStart = state.routeStart || this.arbitraryStart;
         
         // First click sets start, second sets end
-        if (!state.routeStart) {
+        if (!hasStart) {
+            this.arbitraryStart = null;
+            this.arbitraryEnd = null;
             this.store.setState({ routeStart: clickedWaypoint.id });
-        } else if (!state.routeEnd && clickedWaypoint.id !== state.routeStart) {
+            this.renderer.renderArbitraryPoints(null, null);
+        } else if (!state.routeEnd && !this.arbitraryEnd && clickedWaypoint.id !== state.routeStart) {
+            this.arbitraryEnd = null;
             this.store.setState({ routeEnd: clickedWaypoint.id });
         } else if (clickedWaypoint.id === state.routeStart) {
             // Clicking start again clears it
             this.store.setState({ routeStart: null, routeEnd: null });
+            this.arbitraryStart = null;
+            this.arbitraryEnd = null;
             this.clearRouteDisplay();
+            this.renderer.renderArbitraryPoints(null, null);
         } else if (clickedWaypoint.id === state.routeEnd) {
             // Clicking end again clears just the end
             this.store.setState({ routeEnd: null });
@@ -183,8 +241,10 @@ export class ViewerController {
      */
     updateFindRouteButton() {
         const state = this.store.getState();
+        const hasStart = state.routeStart || this.arbitraryStart;
+        const hasEnd = state.routeEnd || this.arbitraryEnd;
         const btn = $('findRouteBtn');
-        btn.disabled = !(state.routeStart && state.routeEnd);
+        btn.disabled = !(hasStart && hasEnd);
     }
     
     /**
@@ -194,22 +254,62 @@ export class ViewerController {
         const state = this.store.getState();
         const map = this.store.getCurrentMap();
         
-        if (!map || !state.routeStart || !state.routeEnd) return;
+        const hasStart = state.routeStart || this.arbitraryStart;
+        const hasEnd = state.routeEnd || this.arbitraryEnd;
+        
+        if (!map || !hasStart || !hasEnd) return;
         
         // Build graph for pathfinder
         const graph = this.pathfinder.buildGraph(map.waypoints, map.edges);
         
-        // Find shortest path
+        // Handle arbitrary start point
+        let effectiveStartId = state.routeStart;
+        let startSegment = null;
+        if (this.arbitraryStart) {
+            const { waypointId, cost } = this.findNearestWaypoint(this.arbitraryStart, map);
+            if (!waypointId) {
+                alert('No waypoints nearby. Place waypoints closer to your start point.');
+                return;
+            }
+            effectiveStartId = waypointId;
+            startSegment = { point: this.arbitraryStart, waypointId, cost };
+        }
+        
+        // Handle arbitrary end point
+        let effectiveEndId = state.routeEnd;
+        let endSegment = null;
+        if (this.arbitraryEnd) {
+            const { waypointId, cost } = this.findNearestWaypoint(this.arbitraryEnd, map);
+            if (!waypointId) {
+                alert('No waypoints nearby. Place waypoints closer to your end point.');
+                return;
+            }
+            effectiveEndId = waypointId;
+            endSegment = { point: this.arbitraryEnd, waypointId, cost };
+        }
+        
+        // Find shortest path between effective waypoints
         const result = this.pathfinder.findKShortestPaths(
             graph,
-            state.routeStart,
-            state.routeEnd,
+            effectiveStartId,
+            effectiveEndId,
             2 // Find 2 paths (primary + alternative)
         );
         
         if (result.paths.length === 0) {
             alert('No route found between these points.');
             return;
+        }
+        
+        // Add segment costs to total
+        const primaryRoute = result.paths[0];
+        if (startSegment) primaryRoute.cost += startSegment.cost;
+        if (endSegment) primaryRoute.cost += endSegment.cost;
+        
+        const altRoute = result.paths[1];
+        if (altRoute) {
+            if (startSegment) altRoute.cost += startSegment.cost;
+            if (endSegment) altRoute.cost += endSegment.cost;
         }
         
         // Store routes in state
@@ -283,7 +383,55 @@ export class ViewerController {
             currentRoute: null,
             alternativeRoute: null
         });
+        this.arbitraryStart = null;
+        this.arbitraryEnd = null;
         this.clearRouteDisplay();
+        this.renderer.renderArbitraryPoints(null, null);
+    }
+    
+    /**
+     * Find the nearest waypoint to a point and calculate terrain cost
+     * @param {{x: number, y: number}} point 
+     * @param {Object} map 
+     * @returns {{waypointId: string|null, cost: number}}
+     */
+    findNearestWaypoint(point, map) {
+        let nearest = null;
+        let nearestDist = Infinity;
+        
+        for (const wp of map.waypoints) {
+            const dist = distance(point.x, point.y, wp.x, wp.y);
+            if (dist < nearestDist && dist < NEARBY_WAYPOINT_RADIUS) {
+                nearestDist = dist;
+                nearest = wp;
+            }
+        }
+        
+        if (!nearest) {
+            return { waypointId: null, cost: 0 };
+        }
+        
+        // Calculate cost based on terrain
+        let cost = nearestDist / 100; // Base cost from distance
+        
+        if (map.terrain) {
+            // Sample terrain along the path
+            const samples = sampleLine(point.x, point.y, nearest.x, nearest.y, 10);
+            let terrainCost = 0;
+            for (let i = 0; i < samples.length - 1; i++) {
+                const midX = (samples[i].x + samples[i + 1].x) / 2;
+                const midY = (samples[i].y + samples[i + 1].y) / 2;
+                const segmentDist = distance(samples[i].x, samples[i].y, samples[i + 1].x, samples[i + 1].y);
+                const terrainMultiplier = getTerrainCostAt(map.terrain, midX, midY, map.imageWidth, map.imageHeight);
+                terrainCost += segmentDist * terrainMultiplier;
+            }
+            cost = terrainCost / 100;
+        }
+        
+        return { 
+            waypointId: nearest.id, 
+            cost: Math.round(cost * 10) / 10 
+        };
     }
     
     /**

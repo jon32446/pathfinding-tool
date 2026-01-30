@@ -21,6 +21,7 @@ import { generateId } from '../utils/helpers.js';
  * @property {'straight'|'bezier'} type - Edge type
  * @property {ControlPoint[]} [controlPoints] - Control points for bezier curves
  * @property {boolean} [bidirectional] - Whether edge can be traversed both ways (default: true)
+ * @property {boolean} [costOverride] - If true, cost is manually set; if false, auto-calculated from terrain
  */
 
 /**
@@ -39,7 +40,8 @@ export function createEdge({ from, to, cost = 1 }) {
         cost,
         type: 'straight',
         controlPoints: [],
-        bidirectional: true
+        bidirectional: true,
+        costOverride: false  // Auto-calculate from terrain by default
     };
 }
 

@@ -79,7 +79,8 @@ Example: User clicks to add a waypoint
 |------|---------|
 | `Map.js` | Map data structure, tree utilities for nested maps. |
 | `Waypoint.js` | Waypoint data, portal helpers. |
-| `Edge.js` | Edge data, straight/bezier conversion. |
+| `Edge.js` | Edge data, straight/bezier conversion, cost override flag. |
+| `Terrain.js` | Terrain layer grid, terrain types, cost calculation utilities. |
 
 ### `/js/utils/`
 
@@ -122,18 +123,35 @@ This makes it easy to add new features that react to existing events.
 ### Bezier Curves
 Edges can be straight lines or cubic bezier curves. Bezier edges store two control points. The pathfinder calculates actual curve length (not straight-line distance) for accurate costs.
 
+### Terrain System
+Maps can have an optional terrain layer - a low-resolution grid overlaying the map image. Each cell contains a terrain type (forest, mountain, water, etc.) with an associated movement cost multiplier.
+
+**Key concepts:**
+- **Grid**: ~100x100 cells, stored as flat array of type IDs
+- **Terrain types**: Predefined set with costs (clear=1, mountain=5, water=8, etc.)
+- **Auto edge costs**: Edges sample terrain along their path; cost = distance × terrain multiplier
+- **Manual override**: Edges can have `costOverride: true` to ignore terrain
+- **Arbitrary routing**: In view mode, Shift+click sets start/end anywhere; cost from terrain
+
+**Paint tool (Edit mode, T key):**
+- Brush paints terrain cells
+- Adjustable brush size (1-10 cells)
+- Eraser removes terrain
+- "Recalc All Costs" updates all non-overridden edges
+
 ## State Shape
 
 ```js
 {
   mode: 'edit' | 'view',
-  currentTool: 'select' | 'waypoint' | 'edge' | 'pan',
+  currentTool: 'select' | 'waypoint' | 'edge' | 'paint' | 'pan',
   currentMapId: string | null,
   maps: {
     [mapId]: {
       id, name, imageData, imageWidth, imageHeight,
       waypoints: [{ id, x, y, name?, isPortal?, portalTargetMapId? }],
-      edges: [{ id, from, to, cost, type, controlPoints?, bidirectional }],
+      edges: [{ id, from, to, cost, type, controlPoints?, bidirectional, costOverride? }],
+      terrain: { gridWidth, gridHeight, grid: string[], types: TerrainType[] } | null,
       parentMapId?
     }
   },
