@@ -317,12 +317,15 @@ export class CanvasRenderer {
         const state = this.store.getState();
         const waypointMap = new Map(map.waypoints.map(wp => [wp.id, wp]));
         
+        // Calculate cost range for color gradient
+        const costRange = this.calculateCostRange(map.edges);
+        
         map.edges.forEach(edge => {
             const fromWp = waypointMap.get(edge.from);
             const toWp = waypointMap.get(edge.to);
             if (!fromWp || !toWp) return;
             
-            const group = this.createEdgeElement(edge, fromWp, toWp, state);
+            const group = this.createEdgeElement(edge, fromWp, toWp, state, costRange);
             this.edgesGroup.appendChild(group);
             this.edgeElements.set(edge.id, group);
         });
@@ -331,14 +334,88 @@ export class CanvasRenderer {
     }
     
     /**
+     * Calculate min and max costs from edges
+     * @param {import('../models/Edge.js').EdgeData[]} edges 
+     * @returns {{min: number, max: number}}
+     */
+    calculateCostRange(edges) {
+        if (edges.length === 0) {
+            return { min: 0, max: 1 };
+        }
+        
+        let min = Infinity;
+        let max = -Infinity;
+        
+        edges.forEach(edge => {
+            min = Math.min(min, edge.cost);
+            max = Math.max(max, edge.cost);
+        });
+        
+        // Avoid division by zero if all edges have same cost
+        if (min === max) {
+            return { min: min, max: min + 1 };
+        }
+        
+        return { min, max };
+    }
+    
+    /**
+     * Get color for an edge based on its cost relative to the range
+     * Uses the "inferno" colormap - perceptually uniform, dark to bright
+     * @param {number} cost 
+     * @param {{min: number, max: number}} range 
+     * @returns {string} RGB color string
+     */
+    getCostColor(cost, range) {
+        // Normalize cost to 0-1
+        const t = (cost - range.min) / (range.max - range.min);
+        
+        // Inferno colormap stops (approximate)
+        // Dark purple → magenta → red-orange → orange → yellow
+        const stops = [
+            { t: 0.00, r: 0,   g: 0,   b: 4   },   // almost black
+            { t: 0.15, r: 40,  g: 11,  b: 84  },   // dark purple
+            { t: 0.30, r: 101, g: 21,  b: 110 },   // purple
+            { t: 0.45, r: 159, g: 42,  b: 99  },   // magenta
+            { t: 0.60, r: 212, g: 72,  b: 66  },   // red-orange
+            { t: 0.75, r: 245, g: 125, b: 21  },   // orange
+            { t: 0.90, r: 250, g: 193, b: 39  },   // yellow-orange
+            { t: 1.00, r: 252, g: 255, b: 164 }    // pale yellow
+        ];
+        
+        // Find the two stops to interpolate between
+        let lower = stops[0];
+        let upper = stops[stops.length - 1];
+        
+        for (let i = 0; i < stops.length - 1; i++) {
+            if (t >= stops[i].t && t <= stops[i + 1].t) {
+                lower = stops[i];
+                upper = stops[i + 1];
+                break;
+            }
+        }
+        
+        // Interpolate between the two stops
+        const range_t = upper.t - lower.t;
+        const local_t = range_t > 0 ? (t - lower.t) / range_t : 0;
+        
+        const r = Math.round(lower.r + (upper.r - lower.r) * local_t);
+        const g = Math.round(lower.g + (upper.g - lower.g) * local_t);
+        const b = Math.round(lower.b + (upper.b - lower.b) * local_t);
+        
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+    
+    /**
      * Create SVG element for an edge
      * @param {import('../models/Edge.js').EdgeData} edge 
      * @param {import('../models/Waypoint.js').WaypointData} fromWp 
      * @param {import('../models/Waypoint.js').WaypointData} toWp 
      * @param {Object} state 
+     * @param {{min: number, max: number}} costRange
      * @returns {SVGGElement}
      */
-    createEdgeElement(edge, fromWp, toWp, state) {
+    createEdgeElement(edge, fromWp, toWp, state, costRange) {
         const group = createSvgElement('g', {
             class: 'edge',
             'data-id': edge.id
@@ -346,11 +423,6 @@ export class CanvasRenderer {
         
         if (state.selectedEdge === edge.id) {
             group.classList.add('selected');
-        }
-        
-        // Mark as expensive if cost is high (>2x average)
-        if (edge.cost > 2) {
-            group.classList.add('expensive');
         }
         
         // Create path based on edge type
@@ -362,9 +434,13 @@ export class CanvasRenderer {
             pathData = `M ${fromWp.x} ${fromWp.y} L ${toWp.x} ${toWp.y}`;
         }
         
+        // Calculate color based on cost
+        const edgeColor = this.getCostColor(edge.cost, costRange);
+        
         const path = createSvgElement('path', {
             class: 'edge-line',
-            d: pathData
+            d: pathData,
+            stroke: edgeColor
         });
         group.appendChild(path);
         
