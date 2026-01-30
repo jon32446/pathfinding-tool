@@ -18,6 +18,9 @@ export class MapManager {
         this.pendingImageData = null;
         this.pendingImageWidth = 0;
         this.pendingImageHeight = 0;
+        
+        // Pending import data
+        this.pendingImportData = null;
     }
     
     /**
@@ -42,6 +45,40 @@ export class MapManager {
         
         // Map creation event
         this.eventBus.on('map:create', () => this.openCreateModal());
+        
+        // Import modal buttons
+        this.setupImportModal();
+    }
+    
+    /**
+     * Set up import confirmation modal
+     */
+    setupImportModal() {
+        const modal = $('importModal');
+        const backdrop = modal.querySelector('.modal-backdrop');
+        const closeBtn = $('importModalClose');
+        const cancelBtn = $('importCancelBtn');
+        const mergeBtn = $('importMergeBtn');
+        const replaceBtn = $('importReplaceBtn');
+        
+        const closeModal = () => {
+            hide(modal);
+            this.pendingImportData = null;
+        };
+        
+        backdrop.addEventListener('click', closeModal);
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        
+        mergeBtn.addEventListener('click', () => {
+            this.executeImport(true);
+            closeModal();
+        });
+        
+        replaceBtn.addEventListener('click', () => {
+            this.executeImport(false);
+            closeModal();
+        });
     }
     
     /**
@@ -236,24 +273,43 @@ export class MapManager {
             const mapCount = Object.keys(data.maps).length;
             const existingCount = Object.keys(this.store.getState().maps).length;
             
-            let merge = false;
+            // Store the pending import data
+            this.pendingImportData = data;
+            
             if (existingCount > 0) {
-                merge = confirm(`You have ${existingCount} existing maps. Click OK to merge with imported maps, or Cancel to replace all maps.`);
-            }
-            
-            if (merge) {
-                const currentMaps = this.store.getState().maps;
-                const mergedMaps = { ...currentMaps, ...data.maps };
-                this.store.setState({ maps: mergedMaps });
+                // Show the import modal with options
+                $('importModalMessage').textContent = 
+                    `You have ${existingCount} existing map(s). Importing ${mapCount} map(s).`;
+                show($('importModal'));
             } else {
-                this.store.setState({ maps: data.maps, currentMapId: null });
+                // No existing maps, just import directly
+                this.executeImport(false);
             }
-            
-            alert(`Imported ${mapCount} map(s) successfully.`);
         } catch (error) {
             console.error('Import failed:', error);
             alert(`Import failed: ${error.message}`);
         }
+    }
+    
+    /**
+     * Execute the import with merge or replace
+     * @param {boolean} merge - If true, merge; if false, replace all
+     */
+    executeImport(merge) {
+        if (!this.pendingImportData) return;
+        
+        const mapCount = Object.keys(this.pendingImportData.maps).length;
+        
+        if (merge) {
+            const currentMaps = this.store.getState().maps;
+            const mergedMaps = { ...currentMaps, ...this.pendingImportData.maps };
+            this.store.setState({ maps: mergedMaps });
+        } else {
+            this.store.setState({ maps: this.pendingImportData.maps, currentMapId: null });
+        }
+        
+        this.pendingImportData = null;
+        alert(`Imported ${mapCount} map(s) successfully.`);
     }
     
     /**
