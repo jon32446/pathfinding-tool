@@ -225,7 +225,9 @@
 }
 
 /* Terrain Palette */
-.terrain-palette {
+/* Tool Palettes (Terrain, Waypoint, etc.) */
+.terrain-palette,
+.tool-palette {
     position: absolute;
     top: 16px;
     left: 70px;
@@ -234,11 +236,34 @@
     border-radius: var(--radius-md);
     padding: 12px;
     box-shadow: var(--shadow-md);
-    width: 180px;
 }
 
-.terrain-palette.hidden {
+.terrain-palette {
+    width: 275px;
+}
+
+.tool-palette {
+    width: 200px;
+}
+
+.terrain-palette.hidden,
+.tool-palette.hidden {
     display: none;
+}
+
+.tool-palette-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.tool-palette-hint {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
 }
 
 .terrain-palette-header {

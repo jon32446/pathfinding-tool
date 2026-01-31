@@ -51,6 +51,7 @@ export class EditorController {
         this.setupEventListeners();
         this.setupToolbar();
         this.setupTerrainPalette();
+        this.setupWaypointPalette();
     }
     
     /**
@@ -192,6 +193,119 @@ export class EditorController {
     }
     
     /**
+     * Set up waypoint palette
+     */
+    setupWaypointPalette() {
+        // Connect all waypoints button
+        $('connectAllWaypointsBtn').addEventListener('click', () => {
+            this.connectAllWaypoints();
+        });
+        
+        // Stop click propagation from waypoint palette to canvas
+        $('waypointPalette').addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    /**
+     * Connect all waypoints to their neighbors
+     * Applies the same sector-based algorithm as Shift+click
+     */
+    connectAllWaypoints() {
+        const map = this.store.getCurrentMap();
+        if (!map || map.waypoints.length < 2) {
+            alert('Need at least 2 waypoints to connect.');
+            return;
+        }
+        
+        let edgesCreated = 0;
+        
+        // Process each waypoint
+        for (const waypoint of map.waypoints) {
+            // Use the same auto-connect algorithm
+            const newEdges = this.getAutoConnectEdges(waypoint, map);
+            
+            for (const { targetWaypoint, cost } of newEdges) {
+                // Check edge doesn't already exist
+                if (!edgeExists(map.edges, waypoint.id, targetWaypoint.id)) {
+                    const edge = createEdge({
+                        from: waypoint.id,
+                        to: targetWaypoint.id,
+                        cost: cost
+                    });
+                    this.store.addEdge(edge);
+                    edgesCreated++;
+                    
+                    // Refresh map reference after adding edge
+                    map.edges = this.store.getCurrentMap().edges;
+                }
+            }
+        }
+        
+        alert(`Created ${edgesCreated} new edge(s).`);
+    }
+    
+    /**
+     * Get edges to auto-connect for a waypoint (without creating them)
+     * @param {Object} waypoint 
+     * @param {Object} map 
+     * @returns {Array<{targetWaypoint: Object, cost: number}>}
+     */
+    getAutoConnectEdges(waypoint, map) {
+        const NUM_SECTORS = 8;
+        const SECTOR_ANGLE = (2 * Math.PI) / NUM_SECTORS;
+        
+        // Find closest waypoint in each sector
+        const sectors = Array(NUM_SECTORS).fill(null).map(() => ({ waypoint: null, distance: Infinity }));
+        
+        for (const wp of map.waypoints) {
+            if (wp.id === waypoint.id) continue;
+            
+            const dx = wp.x - waypoint.x;
+            const dy = wp.y - waypoint.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            let angle = Math.atan2(-dy, dx);
+            if (angle < 0) angle += 2 * Math.PI;
+            
+            const sectorIndex = Math.floor((angle + SECTOR_ANGLE / 2) / SECTOR_ANGLE) % NUM_SECTORS;
+            
+            if (dist < sectors[sectorIndex].distance) {
+                sectors[sectorIndex] = { waypoint: wp, distance: dist };
+            }
+        }
+        
+        // Get distances of waypoints we found
+        const foundDistances = sectors
+            .filter(s => s.waypoint !== null)
+            .map(s => s.distance)
+            .sort((a, b) => a - b);
+        
+        if (foundDistances.length === 0) return [];
+        
+        // Calculate adaptive max distance
+        const medianIndex = Math.floor(foundDistances.length / 2);
+        const medianDistance = foundDistances[medianIndex];
+        const maxDistance = medianDistance * 1.2;
+        
+        // Return waypoints within adaptive distance
+        const results = [];
+        for (const sector of sectors) {
+            if (sector.waypoint && sector.distance <= maxDistance) {
+                // Calculate cost
+                const tempEdge = { type: 'straight', controlPoints: [] };
+                const cost = calculateEdgeTerrainCost(
+                    tempEdge, waypoint, sector.waypoint,
+                    map.terrain, map.imageWidth, map.imageHeight
+                );
+                results.push({ targetWaypoint: sector.waypoint, cost });
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
      * Recalculate costs for all edges based on terrain
      */
     recalculateAllEdgeCosts() {
@@ -254,11 +368,17 @@ export class EditorController {
         };
         $('statusTool').textContent = toolNames[tool] || 'Unknown Tool';
         
-        // Show/hide terrain palette
+        // Show/hide tool palettes
         if (tool === 'paint') {
             show($('terrainPalette'));
         } else {
             hide($('terrainPalette'));
+        }
+        
+        if (tool === 'waypoint') {
+            show($('waypointPalette'));
+        } else {
+            hide($('waypointPalette'));
         }
         
         // Clear edge creation when switching tools

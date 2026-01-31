@@ -170,6 +170,18 @@
                         <button class="btn btn-secondary btn-sm" id="clearTerrainBtn">Clear Terrain</button>
                     </div>
                 </div>
+                
+                <!-- Waypoint Palette (shown when waypoint tool active) -->
+                <div class="tool-palette hidden" id="waypointPalette">
+                    <div class="tool-palette-header">Waypoints</div>
+                    <p class="tool-palette-hint">
+                        Click to place waypoints.<br>
+                        <strong>Shift+click</strong> to auto-connect.
+                    </p>
+                    <button class="btn btn-primary btn-sm" id="connectAllWaypointsBtn" style="width: 100%;">
+                        Connect All Neighbors
+                    </button>
+                </div>
 
                 <!-- View Mode Controls -->
                 <div class="view-controls hidden" id="viewControls">
