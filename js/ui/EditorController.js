@@ -266,8 +266,9 @@ export class EditorController {
             this.clearEdgeCreation();
         }
         
-        // Clear ghost
+        // Clear ghost and brush preview
         this.renderer.clearGhost();
+        this.renderer.clearBrushPreview();
     }
     
     /**
@@ -343,6 +344,14 @@ export class EditorController {
         if (state.currentTool === 'waypoint') {
             this.renderer.showGhostWaypoint(canvasPos.x, canvasPos.y);
         }
+        
+        // Handle paint tool brush preview
+        if (state.currentTool === 'paint') {
+            const map = this.store.getCurrentMap();
+            if (map) {
+                this.renderer.showBrushPreview(canvasPos.x, canvasPos.y, this.brushSize, map);
+            }
+        }
     }
     
     /**
@@ -370,6 +379,10 @@ export class EditorController {
     handleDoubleClick(e) {
         if (!this.isActive) return;
         e.preventDefault(); // Prevent text selection (Firefox)
+        
+        // Only allow renaming in select mode
+        const state = this.store.getState();
+        if (state.currentTool !== 'select') return;
         
         const canvasPos = this.renderer.screenToCanvas(e.clientX, e.clientY);
         const map = this.store.getCurrentMap();

@@ -792,6 +792,64 @@ export class CanvasRenderer {
     }
     
     /**
+     * Show brush preview for terrain painting
+     * @param {number} x - Canvas X coordinate
+     * @param {number} y - Canvas Y coordinate
+     * @param {number} brushSize - Brush size (1 = single cell)
+     * @param {Object} map - Current map
+     */
+    showBrushPreview(x, y, brushSize, map) {
+        // Remove existing preview
+        this.clearBrushPreview();
+        
+        // Don't show if outside map bounds
+        if (x < 0 || x > map.imageWidth || y < 0 || y > map.imageHeight) {
+            return;
+        }
+        
+        // Calculate cell size based on terrain grid
+        const terrain = map.terrain;
+        let cellWidth, cellHeight;
+        
+        if (terrain) {
+            cellWidth = map.imageWidth / terrain.gridWidth;
+            cellHeight = map.imageHeight / terrain.gridHeight;
+        } else {
+            // Estimate based on default grid size (100 cells on longest side)
+            const gridSize = 100;
+            const aspectRatio = map.imageWidth / map.imageHeight;
+            if (aspectRatio >= 1) {
+                cellWidth = map.imageWidth / gridSize;
+                cellHeight = map.imageHeight / Math.round(gridSize / aspectRatio);
+            } else {
+                cellHeight = map.imageHeight / gridSize;
+                cellWidth = map.imageWidth / Math.round(gridSize * aspectRatio);
+            }
+        }
+        
+        // Convert brush size to radius (size 1 = single cell = radius 0)
+        const radius = brushSize - 1;
+        const brushPixelRadius = (radius + 0.5) * Math.max(cellWidth, cellHeight);
+        
+        // Create preview circle
+        const preview = createSvgElement('circle', {
+            class: 'brush-preview',
+            cx: x,
+            cy: y,
+            r: Math.max(brushPixelRadius, cellWidth / 2)
+        });
+        
+        this.svgOverlay.appendChild(preview);
+    }
+    
+    /**
+     * Clear brush preview
+     */
+    clearBrushPreview() {
+        this.svgOverlay.querySelectorAll('.brush-preview').forEach(el => el.remove());
+    }
+    
+    /**
      * Update selection highlighting
      */
     updateSelection() {

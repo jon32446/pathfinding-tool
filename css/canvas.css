@@ -486,6 +486,15 @@
     stroke-dasharray: 4 2;
 }
 
+/* Brush Preview (terrain painting) */
+.brush-preview {
+    fill: rgba(255, 255, 255, 0.15);
+    stroke: rgba(255, 255, 255, 0.6);
+    stroke-width: 2;
+    stroke-dasharray: 6 3;
+    pointer-events: none;
+}
+
 /* Ghost Elements (during drag operations) */
 .ghost-edge {
     stroke: var(--color-edge);
