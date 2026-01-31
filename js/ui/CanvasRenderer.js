@@ -134,7 +134,10 @@ export class CanvasRenderer {
             this.renderWaypoints();
             this.renderEdges(); // Edges depend on waypoint positions
         });
-        this.eventBus.on('waypoint:deleted', () => this.renderWaypoints());
+        this.eventBus.on('waypoint:deleted', () => {
+            this.renderWaypoints();
+            this.renderEdges(); // Connected edges are also deleted
+        });
         this.eventBus.on('edge:added', () => this.renderEdges());
         this.eventBus.on('edge:updated', () => {
             this.renderEdges();
