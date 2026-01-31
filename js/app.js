@@ -15,6 +15,7 @@ import { EditorController } from './ui/EditorController.js';
 import { ViewerController } from './ui/ViewerController.js';
 import { Sidebar } from './ui/Sidebar.js';
 import { Pathfinder } from './engine/Pathfinder.js';
+import { VERSION, BUILD_DATE } from './version.js';
 
 /**
  * Main Application Class
@@ -85,7 +86,21 @@ class App {
         // Initialize edit mode (activate directly since state already says 'edit')
         this.editorController.activate();
         
+        // Display version
+        this.displayVersion();
+        
         console.log('Map Pathfinder ready!');
+    }
+    
+    /**
+     * Display version information in status bar
+     */
+    displayVersion() {
+        const versionEl = document.getElementById('statusVersion');
+        if (versionEl) {
+            versionEl.textContent = VERSION;
+            versionEl.title = `Version: ${VERSION} | Built: ${BUILD_DATE}`;
+        }
     }
     
     /**
