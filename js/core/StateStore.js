@@ -103,10 +103,30 @@ export class StateStore {
      * @returns {boolean} True if undo was performed
      */
     undo() {
+        if (this.history.length === 0) return false;
+        
+        // If at the tip of history, save current state for redo
+        // (because pushHistory saves state BEFORE mutations, current state isn't in history yet)
+        if (this.historyIndex === this.history.length - 1) {
+            const map = this.getCurrentMap();
+            if (map) {
+                const snapshot = {
+                    mapId: map.id,
+                    waypoints: JSON.parse(JSON.stringify(map.waypoints)),
+                    edges: JSON.parse(JSON.stringify(map.edges)),
+                    terrain: map.terrain ? JSON.parse(JSON.stringify(map.terrain)) : null
+                };
+                this.history.push(snapshot);
+                this.historyIndex = this.history.length - 1; // Point to the just-saved state
+            }
+        }
+        
+        // Can't undo if already at the beginning
         if (this.historyIndex <= 0) return false;
         
         this.historyIndex--;
         this.restoreFromHistory();
+        this.eventBus.emit('history:changed', this.getHistoryInfo());
         return true;
     }
     
@@ -119,6 +139,7 @@ export class StateStore {
         
         this.historyIndex++;
         this.restoreFromHistory();
+        this.eventBus.emit('history:changed', this.getHistoryInfo());
         return true;
     }
     
@@ -166,8 +187,12 @@ export class StateStore {
      * @returns {{canUndo: boolean, canRedo: boolean}}
      */
     getHistoryInfo() {
+        // Can undo if there's history AND we're not at the very beginning
+        // (historyIndex > 0, or historyIndex === history.length - 1 meaning we haven't undone yet)
+        const canUndo = this.history.length > 0 && 
+            (this.historyIndex > 0 || this.historyIndex === this.history.length - 1);
         return {
-            canUndo: this.historyIndex > 0,
+            canUndo,
             canRedo: this.historyIndex < this.history.length - 1
         };
     }

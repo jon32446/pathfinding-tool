@@ -117,6 +117,19 @@ class App {
             this.handleMapSelect(mapId);
         });
         
+        // Undo/Redo buttons
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        
+        undoBtn.addEventListener('click', () => this.store.undo());
+        redoBtn.addEventListener('click', () => this.store.redo());
+        
+        // Update undo/redo button states
+        this.eventBus.on('history:changed', ({ canUndo, canRedo }) => {
+            undoBtn.disabled = !canUndo;
+            redoBtn.disabled = !canRedo;
+        });
+        
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             this.handleKeydown(e);

@@ -457,9 +457,21 @@
     transition: all var(--transition-fast);
 }
 
-.zoom-btn:hover {
+.zoom-btn:hover:not(:disabled) {
     color: var(--color-text-primary);
     background: var(--color-surface);
+}
+
+.zoom-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--color-border);
+    margin: 0 4px;
 }
 
 .zoom-level {
