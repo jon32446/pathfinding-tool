@@ -247,7 +247,7 @@ export class EditorController {
         // Update status
         const toolNames = {
             select: 'Select Tool',
-            waypoint: 'Add Waypoint',
+            waypoint: 'Add Waypoint (Shift: auto-connect)',
             edge: 'Add Edge',
             paint: 'Paint Terrain',
             pan: 'Pan Tool'
@@ -299,7 +299,7 @@ export class EditorController {
                 this.handleSelectToolClick(hitResult, canvasPos, e);
                 break;
             case 'waypoint':
-                this.handleWaypointToolClick(canvasPos);
+                this.handleWaypointToolClick(canvasPos, e);
                 break;
             case 'edge':
                 this.handleEdgeToolClick(hitResult, canvasPos);
@@ -471,8 +471,9 @@ export class EditorController {
     /**
      * Handle waypoint tool click
      * @param {{x: number, y: number}} canvasPos 
+     * @param {MouseEvent} e
      */
-    handleWaypointToolClick(canvasPos) {
+    handleWaypointToolClick(canvasPos, e) {
         const map = this.store.getCurrentMap();
         if (!map) return;
         
@@ -489,6 +490,86 @@ export class EditorController {
         
         this.store.addWaypoint(waypoint);
         this.store.setState({ selectedWaypoint: waypoint.id, selectedEdge: null });
+        
+        // Shift+click: auto-connect to nearby waypoints in each direction
+        if (e.shiftKey && map.waypoints.length > 0) {
+            this.autoConnectWaypoint(waypoint, map);
+        }
+    }
+    
+    /**
+     * Auto-connect a waypoint to neighbors in each compass direction
+     * Uses adaptive distance based on local waypoint density
+     * @param {Object} newWaypoint 
+     * @param {Object} map 
+     */
+    autoConnectWaypoint(newWaypoint, map) {
+        // Define 8 compass sectors (45 degrees each)
+        // Sector 0 = East (right), going counter-clockwise
+        const NUM_SECTORS = 8;
+        const SECTOR_ANGLE = (2 * Math.PI) / NUM_SECTORS;
+        
+        // Find closest waypoint in each sector
+        const sectors = Array(NUM_SECTORS).fill(null).map(() => ({ waypoint: null, distance: Infinity }));
+        
+        for (const wp of map.waypoints) {
+            if (wp.id === newWaypoint.id) continue;
+            
+            const dx = wp.x - newWaypoint.x;
+            const dy = wp.y - newWaypoint.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Calculate angle (0 = right/east, counter-clockwise)
+            let angle = Math.atan2(-dy, dx); // Negative dy because y increases downward
+            if (angle < 0) angle += 2 * Math.PI;
+            
+            // Determine sector
+            const sectorIndex = Math.floor((angle + SECTOR_ANGLE / 2) / SECTOR_ANGLE) % NUM_SECTORS;
+            
+            // Keep closest in each sector
+            if (dist < sectors[sectorIndex].distance) {
+                sectors[sectorIndex] = { waypoint: wp, distance: dist };
+            }
+        }
+        
+        // Get distances of waypoints we found
+        const foundDistances = sectors
+            .filter(s => s.waypoint !== null)
+            .map(s => s.distance)
+            .sort((a, b) => a - b);
+        
+        if (foundDistances.length === 0) return;
+        
+        // Calculate adaptive max distance
+        // Use median distance + 20% as the cutoff
+        const medianIndex = Math.floor(foundDistances.length / 2);
+        const medianDistance = foundDistances[medianIndex];
+        const maxDistance = medianDistance * 1.2;
+        
+        // Create edges to waypoints within adaptive distance
+        for (const sector of sectors) {
+            if (sector.waypoint && sector.distance <= maxDistance) {
+                // Check edge doesn't already exist
+                if (!edgeExists(map.edges, newWaypoint.id, sector.waypoint.id)) {
+                    const fromWp = newWaypoint;
+                    const toWp = sector.waypoint;
+                    
+                    // Calculate initial cost from terrain
+                    const tempEdge = { type: 'straight', controlPoints: [] };
+                    const initialCost = calculateEdgeTerrainCost(
+                        tempEdge, fromWp, toWp,
+                        map.terrain, map.imageWidth, map.imageHeight
+                    );
+                    
+                    const edge = createEdge({
+                        from: newWaypoint.id,
+                        to: sector.waypoint.id,
+                        cost: initialCost
+                    });
+                    this.store.addEdge(edge);
+                }
+            }
+        }
     }
     
     /**
@@ -866,6 +947,8 @@ export class EditorController {
         const map = this.store.getCurrentMap();
         if (map) {
             this.paintAt(canvasPos, map);
+            // Keep brush preview following cursor while painting
+            this.renderer.showBrushPreview(canvasPos.x, canvasPos.y, this.brushSize, map);
         }
     }
     
