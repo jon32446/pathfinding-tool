@@ -37,6 +37,8 @@ const DEFAULT_STATE = {
     pan: { x: 0, y: 0 }
 };
 
+const MAX_HISTORY_SIZE = 100;
+
 export class StateStore {
     /**
      * @param {import('./EventBus.js').EventBus} eventBus 
@@ -45,6 +47,11 @@ export class StateStore {
         this.eventBus = eventBus;
         /** @type {AppState} */
         this.state = { ...DEFAULT_STATE };
+        
+        // Undo/redo history (stores only mutable map data, not images)
+        this.history = [];
+        this.historyIndex = -1;
+        this.isRestoringHistory = false; // Prevent history push during restore
     }
     
     /**
@@ -53,6 +60,125 @@ export class StateStore {
      */
     getState() {
         return this.state;
+    }
+    
+    /**
+     * Push current map state to history (for undo)
+     * Only stores mutable data (waypoints, edges, terrain), not images
+     */
+    pushHistory() {
+        if (this.isRestoringHistory) return;
+        
+        const map = this.getCurrentMap();
+        if (!map) return;
+        
+        // Create snapshot of mutable data only
+        const snapshot = {
+            mapId: map.id,
+            waypoints: JSON.parse(JSON.stringify(map.waypoints)),
+            edges: JSON.parse(JSON.stringify(map.edges)),
+            terrain: map.terrain ? JSON.parse(JSON.stringify(map.terrain)) : null
+        };
+        
+        // Remove any future history if we're not at the end
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        
+        // Add new snapshot
+        this.history.push(snapshot);
+        this.historyIndex = this.history.length - 1;
+        
+        // Limit history size
+        if (this.history.length > MAX_HISTORY_SIZE) {
+            this.history.shift();
+            this.historyIndex--;
+        }
+        
+        this.eventBus.emit('history:changed', this.getHistoryInfo());
+    }
+    
+    /**
+     * Undo last change
+     * @returns {boolean} True if undo was performed
+     */
+    undo() {
+        if (this.historyIndex <= 0) return false;
+        
+        this.historyIndex--;
+        this.restoreFromHistory();
+        return true;
+    }
+    
+    /**
+     * Redo previously undone change
+     * @returns {boolean} True if redo was performed
+     */
+    redo() {
+        if (this.historyIndex >= this.history.length - 1) return false;
+        
+        this.historyIndex++;
+        this.restoreFromHistory();
+        return true;
+    }
+    
+    /**
+     * Restore map state from current history position
+     */
+    restoreFromHistory() {
+        const snapshot = this.history[this.historyIndex];
+        if (!snapshot) return;
+        
+        const map = this.state.maps[snapshot.mapId];
+        if (!map) return;
+        
+        this.isRestoringHistory = true;
+        
+        // Restore mutable data
+        const updatedMap = {
+            ...map,
+            waypoints: JSON.parse(JSON.stringify(snapshot.waypoints)),
+            edges: JSON.parse(JSON.stringify(snapshot.edges)),
+            terrain: snapshot.terrain ? JSON.parse(JSON.stringify(snapshot.terrain)) : null
+        };
+        
+        this.setMap(updatedMap);
+        
+        // Clear selections that may no longer be valid
+        const waypointIds = new Set(updatedMap.waypoints.map(wp => wp.id));
+        const edgeIds = new Set(updatedMap.edges.map(e => e.id));
+        
+        if (this.state.selectedWaypoint && !waypointIds.has(this.state.selectedWaypoint)) {
+            this.state.selectedWaypoint = null;
+        }
+        if (this.state.selectedEdge && !edgeIds.has(this.state.selectedEdge)) {
+            this.state.selectedEdge = null;
+        }
+        
+        this.isRestoringHistory = false;
+        
+        this.eventBus.emit('history:changed', this.getHistoryInfo());
+        this.eventBus.emit('map:changed');
+    }
+    
+    /**
+     * Get undo/redo availability info
+     * @returns {{canUndo: boolean, canRedo: boolean}}
+     */
+    getHistoryInfo() {
+        return {
+            canUndo: this.historyIndex > 0,
+            canRedo: this.historyIndex < this.history.length - 1
+        };
+    }
+    
+    /**
+     * Clear history (e.g., when switching maps)
+     */
+    clearHistory() {
+        this.history = [];
+        this.historyIndex = -1;
+        this.eventBus.emit('history:changed', this.getHistoryInfo());
     }
     
     /**
@@ -151,6 +277,8 @@ export class StateStore {
         const map = this.getCurrentMap();
         if (!map) return;
         
+        this.pushHistory();
+        
         const updatedMap = {
             ...map,
             waypoints: [...map.waypoints, waypoint]
@@ -163,10 +291,13 @@ export class StateStore {
      * Update a waypoint in the current map
      * @param {string} waypointId 
      * @param {Partial<import('../models/Waypoint.js').WaypointData>} changes 
+     * @param {boolean} [recordHistory=true] - Whether to record in undo history
      */
-    updateWaypoint(waypointId, changes) {
+    updateWaypoint(waypointId, changes, recordHistory = true) {
         const map = this.getCurrentMap();
         if (!map) return;
+        
+        if (recordHistory) this.pushHistory();
         
         const updatedMap = {
             ...map,
@@ -185,6 +316,8 @@ export class StateStore {
     deleteWaypoint(waypointId) {
         const map = this.getCurrentMap();
         if (!map) return;
+        
+        this.pushHistory();
         
         // Also delete any edges connected to this waypoint
         const updatedMap = {
@@ -210,6 +343,8 @@ export class StateStore {
         const map = this.getCurrentMap();
         if (!map) return;
         
+        this.pushHistory();
+        
         const updatedMap = {
             ...map,
             edges: [...map.edges, edge]
@@ -222,10 +357,13 @@ export class StateStore {
      * Update an edge in the current map
      * @param {string} edgeId 
      * @param {Partial<import('../models/Edge.js').EdgeData>} changes 
+     * @param {boolean} [recordHistory=true] - Whether to record in undo history
      */
-    updateEdge(edgeId, changes) {
+    updateEdge(edgeId, changes, recordHistory = true) {
         const map = this.getCurrentMap();
         if (!map) return;
+        
+        if (recordHistory) this.pushHistory();
         
         const updatedMap = {
             ...map,
@@ -245,6 +383,8 @@ export class StateStore {
         const map = this.getCurrentMap();
         if (!map) return;
         
+        this.pushHistory();
+        
         const updatedMap = {
             ...map,
             edges: map.edges.filter(e => e.id !== edgeId)
@@ -262,10 +402,13 @@ export class StateStore {
     /**
      * Update terrain layer for the current map
      * @param {import('../models/Terrain.js').TerrainLayer} terrain 
+     * @param {boolean} [recordHistory=false] - Whether to record in undo history (default false for paint strokes)
      */
-    setTerrain(terrain) {
+    setTerrain(terrain, recordHistory = false) {
         const map = this.getCurrentMap();
         if (!map) return;
+        
+        if (recordHistory) this.pushHistory();
         
         const updatedMap = {
             ...map,

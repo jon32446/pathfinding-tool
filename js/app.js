@@ -183,6 +183,9 @@ class App {
         const state = this.store.getState();
         if (state.currentMapId === mapId) return;
         
+        // Clear undo history when switching maps
+        this.store.clearHistory();
+        
         this.store.setState({ 
             currentMapId: mapId,
             selectedWaypoint: null,
@@ -238,6 +241,20 @@ class App {
                     this.eventBus.emit('tool:select', 'paint');
                     break;
             }
+        }
+        
+        // Undo/Redo shortcuts (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                this.store.redo();
+            } else {
+                this.store.undo();
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+            e.preventDefault();
+            this.store.redo();
         }
         
         // Zoom shortcuts

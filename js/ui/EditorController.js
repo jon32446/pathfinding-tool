@@ -759,6 +759,9 @@ export class EditorController {
      * @param {{x: number, y: number}} canvasPos 
      */
     startDrag(type, id, index, canvasPos) {
+        // Push history at start of drag (not during)
+        this.store.pushHistory();
+        
         this.isDragging = true;
         this.dragTarget = { type, id, index };
         this.dragStart = { ...canvasPos };
@@ -785,10 +788,11 @@ export class EditorController {
         const dy = canvasPos.y - this.dragStart.y;
         
         if (this.dragTarget.type === 'waypoint') {
+            // Don't record history during drag - it was recorded at start
             this.store.updateWaypoint(this.dragTarget.id, {
                 x: Math.round(this.originalPosition.x + dx),
                 y: Math.round(this.originalPosition.y + dy)
-            });
+            }, false);
         } else if (this.dragTarget.type === 'controlPoint') {
             const edge = this.store.getEdge(this.dragTarget.id);
             if (edge && edge.controlPoints) {
@@ -797,7 +801,8 @@ export class EditorController {
                     x: this.originalPosition.x + dx,
                     y: this.originalPosition.y + dy
                 };
-                this.store.updateEdge(this.dragTarget.id, { controlPoints: newControlPoints });
+                // Don't record history during drag
+                this.store.updateEdge(this.dragTarget.id, { controlPoints: newControlPoints }, false);
             }
         }
     }
@@ -1055,6 +1060,9 @@ export class EditorController {
      * @param {Object} map 
      */
     startPainting(canvasPos, map) {
+        // Push history at start of paint stroke (not during)
+        this.store.pushHistory();
+        
         this.isPainting = true;
         this.paintAt(canvasPos, map);
     }
