@@ -82,6 +82,11 @@ export class ViewerController {
     setupControls() {
         $('findRouteBtn').addEventListener('click', () => this.findRoute());
         $('clearRouteBtn').addEventListener('click', () => this.clearRoute());
+        
+        // Stop click propagation from view controls to canvas
+        $('viewControls').addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
     }
     
     /**
@@ -220,6 +225,7 @@ export class ViewerController {
      */
     handleDoubleClick(e) {
         if (!this.isActive) return;
+        e.preventDefault(); // Prevent text selection (Firefox)
         
         const map = this.store.getCurrentMap();
         if (!map) return;

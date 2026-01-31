@@ -111,6 +111,11 @@ export class EditorController {
                 this.eventBus.emit('tool:select', tool);
             });
         });
+        
+        // Stop click propagation from toolbar to canvas
+        $('canvasTools').addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
     }
     
     /**
@@ -136,7 +141,7 @@ export class EditorController {
             btn.dataset.terrainType = type.id;
             btn.innerHTML = `
                 <span class="terrain-color-swatch" style="background: ${type.color};"></span>
-                <span class="terrain-type-name">${type.name}</span>
+                <span class="terrain-type-name">${type.name} (${type.cost})</span>
             `;
             terrainTypes.appendChild(btn);
         });
@@ -178,6 +183,11 @@ export class EditorController {
         // Recalculate all edge costs button
         $('recalcAllCostsBtn').addEventListener('click', () => {
             this.recalculateAllEdgeCosts();
+        });
+        
+        // Stop click propagation from terrain palette to canvas
+        $('terrainPalette').addEventListener('mousedown', (e) => {
+            e.stopPropagation();
         });
     }
     
@@ -359,6 +369,7 @@ export class EditorController {
      */
     handleDoubleClick(e) {
         if (!this.isActive) return;
+        e.preventDefault(); // Prevent text selection (Firefox)
         
         const canvasPos = this.renderer.screenToCanvas(e.clientX, e.clientY);
         const map = this.store.getCurrentMap();
@@ -449,6 +460,15 @@ export class EditorController {
      * @param {{x: number, y: number}} canvasPos 
      */
     handleWaypointToolClick(canvasPos) {
+        const map = this.store.getCurrentMap();
+        if (!map) return;
+        
+        // Bounds check - don't place waypoints outside the map
+        if (canvasPos.x < 0 || canvasPos.x > map.imageWidth ||
+            canvasPos.y < 0 || canvasPos.y > map.imageHeight) {
+            return;
+        }
+        
         const waypoint = createWaypoint({
             x: Math.round(canvasPos.x),
             y: Math.round(canvasPos.y)
@@ -849,6 +869,12 @@ export class EditorController {
      * @param {Object} map 
      */
     paintAt(canvasPos, map) {
+        // Bounds check - don't paint outside the map
+        if (canvasPos.x < 0 || canvasPos.x > map.imageWidth ||
+            canvasPos.y < 0 || canvasPos.y > map.imageHeight) {
+            return;
+        }
+        
         // Create terrain layer if it doesn't exist
         let terrain = map.terrain;
         if (!terrain) {

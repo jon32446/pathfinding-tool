@@ -113,12 +113,15 @@ export function setTerrainAt(terrain, cellX, cellY, typeId) {
  * @param {TerrainLayer} terrain 
  * @param {number} centerX - Center cell X
  * @param {number} centerY - Center cell Y
- * @param {number} radius - Brush radius in cells
+ * @param {number} brushSize - Brush size (1 = single cell, 2 = ~3x3, etc.)
  * @param {string|null} typeId - Terrain type ID
  * @returns {TerrainLayer}
  */
-export function paintTerrain(terrain, centerX, centerY, radius, typeId) {
+export function paintTerrain(terrain, centerX, centerY, brushSize, typeId) {
     const newGrid = [...terrain.grid];
+    
+    // Convert brush size to radius: size 1 = single cell (radius 0)
+    const radius = brushSize - 1;
     const radiusSq = radius * radius;
     
     for (let dy = -radius; dy <= radius; dy++) {

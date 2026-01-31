@@ -11,6 +11,10 @@
         linear-gradient(-45deg, transparent 75%, var(--color-bg-primary) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    /* Prevent text/image selection on double-click (Firefox fix) */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
 }
 
 /* Canvas Wrapper (for pan/zoom) */
