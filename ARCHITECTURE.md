@@ -43,7 +43,7 @@ Example: User clicks to add a waypoint
 - Single source of truth prevents sync bugs
 - Any component can react to any state change
 - Easy to add features (just listen to events)
-- Undo/redo could be added by tracking state history
+- Undo/redo is implemented by tracking state history
 
 ## Core Components
 
@@ -52,8 +52,8 @@ Example: User clicks to add a waypoint
 | File | Purpose |
 |------|---------|
 | `EventBus.js` | Pub/sub messaging. Components communicate without direct references. |
-| `StateStore.js` | Holds all app state. Emits events on changes. Has helpers for map/waypoint/edge CRUD. |
-| `Storage.js` | LocalStorage persistence + JSON export/import. Auto-saves on state changes. |
+| `StateStore.js` | Holds all app state. Emits events on changes. Has helpers for map/waypoint/edge CRUD. Manages undo/redo history. |
+| `Storage.js` | IndexedDB persistence + JSON export/import. Auto-saves on state changes. Migrates from legacy LocalStorage. |
 
 ### `/js/ui/`
 
@@ -139,6 +139,35 @@ Maps can have an optional terrain layer - a low-resolution grid overlaying the m
 - Eraser removes terrain
 - "Recalc All Costs" updates all non-overridden edges
 
+### Undo/Redo System
+
+Full undo/redo support via state snapshots in `StateStore`.
+
+**Key concepts:**
+- **History array**: Stores snapshots of mutable map data (waypoints, edges, terrain)
+- **Excludes images**: Map images are static after creation, so not stored in history (saves memory)
+- **hasUnsavedChanges flag**: Tracks if current state differs from last history entry
+- **Batch operations**: Multiple changes can be grouped into a single undo step
+
+**History flow:**
+```
+pushHistory() → saves state BEFORE mutation
+mutation happens → state changes
+undo() → if hasUnsavedChanges, saves current state first, then restores previous
+redo() → restores next state in history
+```
+
+**Batch operations** (`beginBatch()` / `endBatch()`):
+- Groups multiple mutations into single undo step
+- Used by: "Connect All Neighbors", Shift+click waypoint, "Recalc All Costs"
+- History pushed once at batch start; individual mutations skip pushing
+- Batches can be nested
+
+**Memory efficiency:**
+- Only mutable data stored (waypoints, edges, terrain grid)
+- Map images (~MB) excluded → snapshots are typically ~10-50KB
+- Max 100 history entries (configurable via `MAX_HISTORY_SIZE`)
+
 ## State Shape
 
 ```js
@@ -181,3 +210,18 @@ Maps can have an optional terrain layer - a low-resolution grid overlaying the m
 **React to new state:**
 1. Emit event from `StateStore.setState()` (see existing pattern)
 2. Listen in relevant component with `eventBus.on('event:name', handler)`
+
+## Deployment
+
+### GitHub Actions (`.github/workflows/deploy.yml`)
+
+On push to `master`:
+1. Checks out code
+2. Injects git short hash and build date into `js/version.js`
+3. Uploads to GitHub Pages
+
+**Version display:**
+- `js/version.js` exports `VERSION` and `BUILD_DATE`
+- Shows "dev" / "local" for local development
+- Shows git hash (e.g., "a1b2c3d") when deployed via Actions
+- Displayed in status bar bottom-right
