@@ -52,6 +52,7 @@ export class StateStore {
         this.history = [];
         this.historyIndex = -1;
         this.isRestoringHistory = false; // Prevent history push during restore
+        this.hasUnsavedChanges = false; // Track if there are changes not yet in history
     }
     
     /**
@@ -89,6 +90,9 @@ export class StateStore {
         this.history.push(snapshot);
         this.historyIndex = this.history.length - 1;
         
+        // Mark that we have unsaved changes (the mutation about to happen)
+        this.hasUnsavedChanges = true;
+        
         // Limit history size
         if (this.history.length > MAX_HISTORY_SIZE) {
             this.history.shift();
@@ -105,9 +109,9 @@ export class StateStore {
     undo() {
         if (this.history.length === 0) return false;
         
-        // If at the tip of history, save current state for redo
+        // If we have unsaved changes, save current state for redo first
         // (because pushHistory saves state BEFORE mutations, current state isn't in history yet)
-        if (this.historyIndex === this.history.length - 1) {
+        if (this.hasUnsavedChanges) {
             const map = this.getCurrentMap();
             if (map) {
                 const snapshot = {
@@ -119,6 +123,7 @@ export class StateStore {
                 this.history.push(snapshot);
                 this.historyIndex = this.history.length - 1; // Point to the just-saved state
             }
+            this.hasUnsavedChanges = false;
         }
         
         // Can't undo if already at the beginning
@@ -187,10 +192,11 @@ export class StateStore {
      * @returns {{canUndo: boolean, canRedo: boolean}}
      */
     getHistoryInfo() {
-        // Can undo if there's history AND we're not at the very beginning
-        // (historyIndex > 0, or historyIndex === history.length - 1 meaning we haven't undone yet)
+        // Can undo if there's history AND either:
+        // - we have unsaved changes to undo, OR
+        // - we're not at the very beginning of history
         const canUndo = this.history.length > 0 && 
-            (this.historyIndex > 0 || this.historyIndex === this.history.length - 1);
+            (this.hasUnsavedChanges || this.historyIndex > 0);
         return {
             canUndo,
             canRedo: this.historyIndex < this.history.length - 1
@@ -203,6 +209,7 @@ export class StateStore {
     clearHistory() {
         this.history = [];
         this.historyIndex = -1;
+        this.hasUnsavedChanges = false;
         this.eventBus.emit('history:changed', this.getHistoryInfo());
     }
     
