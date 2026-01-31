@@ -45,6 +45,9 @@ class App {
     async init() {
         console.log('Map Pathfinder initializing...');
         
+        // Initialize IndexedDB
+        await this.storage.init();
+        
         // Initialize UI components
         this.toolbar = new Toolbar(this.eventBus, this.store);
         this.sidebar = new Sidebar(this.eventBus, this.store);
@@ -65,7 +68,7 @@ class App {
         // Set up global event listeners
         this.setupEventListeners();
         
-        // Load saved data from storage
+        // Load saved data from storage (migrates from localStorage if needed)
         await this.storage.load();
         
         // Initialize all UI components
