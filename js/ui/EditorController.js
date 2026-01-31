@@ -220,26 +220,33 @@ export class EditorController {
         
         let edgesCreated = 0;
         
-        // Process each waypoint
-        for (const waypoint of map.waypoints) {
-            // Use the same auto-connect algorithm
-            const newEdges = this.getAutoConnectEdges(waypoint, map);
-            
-            for (const { targetWaypoint, cost } of newEdges) {
-                // Check edge doesn't already exist
-                if (!edgeExists(map.edges, waypoint.id, targetWaypoint.id)) {
-                    const edge = createEdge({
-                        from: waypoint.id,
-                        to: targetWaypoint.id,
-                        cost: cost
-                    });
-                    this.store.addEdge(edge);
-                    edgesCreated++;
-                    
-                    // Refresh map reference after adding edge
-                    map.edges = this.store.getCurrentMap().edges;
+        // Batch all edge additions into a single undo operation
+        this.store.beginBatch();
+        
+        try {
+            // Process each waypoint
+            for (const waypoint of map.waypoints) {
+                // Use the same auto-connect algorithm
+                const newEdges = this.getAutoConnectEdges(waypoint, map);
+                
+                for (const { targetWaypoint, cost } of newEdges) {
+                    // Check edge doesn't already exist
+                    if (!edgeExists(map.edges, waypoint.id, targetWaypoint.id)) {
+                        const edge = createEdge({
+                            from: waypoint.id,
+                            to: targetWaypoint.id,
+                            cost: cost
+                        });
+                        this.store.addEdge(edge);
+                        edgesCreated++;
+                        
+                        // Refresh map reference after adding edge
+                        map.edges = this.store.getCurrentMap().edges;
+                    }
                 }
             }
+        } finally {
+            this.store.endBatch();
         }
         
         alert(`Created ${edgesCreated} new edge(s).`);
@@ -318,20 +325,27 @@ export class EditorController {
         const waypointMap = new Map(map.waypoints.map(wp => [wp.id, wp]));
         let updated = 0;
         
-        map.edges.forEach(edge => {
-            // Skip edges with manual override
-            if (edge.costOverride) return;
-            
-            const fromWp = waypointMap.get(edge.from);
-            const toWp = waypointMap.get(edge.to);
-            if (!fromWp || !toWp) return;
-            
-            const newCost = calculateEdgeTerrainCost(edge, fromWp, toWp, map.terrain, map.imageWidth, map.imageHeight);
-            if (newCost !== edge.cost) {
-                this.store.updateEdge(edge.id, { cost: newCost });
-                updated++;
-            }
-        });
+        // Batch all edge updates into single undo
+        this.store.beginBatch();
+        
+        try {
+            map.edges.forEach(edge => {
+                // Skip edges with manual override
+                if (edge.costOverride) return;
+                
+                const fromWp = waypointMap.get(edge.from);
+                const toWp = waypointMap.get(edge.to);
+                if (!fromWp || !toWp) return;
+                
+                const newCost = calculateEdgeTerrainCost(edge, fromWp, toWp, map.terrain, map.imageWidth, map.imageHeight);
+                if (newCost !== edge.cost) {
+                    this.store.updateEdge(edge.id, { cost: newCost });
+                    updated++;
+                }
+            });
+        } finally {
+            this.store.endBatch();
+        }
         
         alert(`Recalculated ${updated} edge cost(s) from terrain.`);
     }
@@ -603,17 +617,29 @@ export class EditorController {
             return;
         }
         
-        const waypoint = createWaypoint({
-            x: Math.round(canvasPos.x),
-            y: Math.round(canvasPos.y)
-        });
+        // Shift+click batches waypoint + auto-connect as single undo
+        const shouldAutoConnect = e.shiftKey && map.waypoints.length > 0;
+        if (shouldAutoConnect) {
+            this.store.beginBatch();
+        }
         
-        this.store.addWaypoint(waypoint);
-        this.store.setState({ selectedWaypoint: waypoint.id, selectedEdge: null });
-        
-        // Shift+click: auto-connect to nearby waypoints in each direction
-        if (e.shiftKey && map.waypoints.length > 0) {
-            this.autoConnectWaypoint(waypoint, map);
+        try {
+            const waypoint = createWaypoint({
+                x: Math.round(canvasPos.x),
+                y: Math.round(canvasPos.y)
+            });
+            
+            this.store.addWaypoint(waypoint);
+            this.store.setState({ selectedWaypoint: waypoint.id, selectedEdge: null });
+            
+            // Shift+click: auto-connect to nearby waypoints in each direction
+            if (shouldAutoConnect) {
+                this.autoConnectWaypoint(waypoint, map);
+            }
+        } finally {
+            if (shouldAutoConnect) {
+                this.store.endBatch();
+            }
         }
     }
     

@@ -53,6 +53,8 @@ export class StateStore {
         this.historyIndex = -1;
         this.isRestoringHistory = false; // Prevent history push during restore
         this.hasUnsavedChanges = false; // Track if there are changes not yet in history
+        this.batchDepth = 0; // For grouping multiple operations into single undo
+        this.batchHadChanges = false; // Track if batch had any changes
     }
     
     /**
@@ -64,11 +66,46 @@ export class StateStore {
     }
     
     /**
+     * Begin a batch of operations that should be undone together
+     * Call endBatch() when done. Batches can be nested.
+     */
+    beginBatch() {
+        if (this.batchDepth === 0) {
+            // First level of batch - push history now (captures state before batch)
+            this.pushHistory();
+            this.batchHadChanges = false;
+        }
+        this.batchDepth++;
+    }
+    
+    /**
+     * End a batch of operations
+     */
+    endBatch() {
+        if (this.batchDepth > 0) {
+            this.batchDepth--;
+            if (this.batchDepth === 0 && !this.batchHadChanges) {
+                // No changes were made during batch - remove the history entry we added
+                this.history.pop();
+                this.historyIndex = this.history.length - 1;
+                this.hasUnsavedChanges = this.history.length > 0;
+                this.eventBus.emit('history:changed', this.getHistoryInfo());
+            }
+        }
+    }
+    
+    /**
      * Push current map state to history (for undo)
      * Only stores mutable data (waypoints, edges, terrain), not images
      */
     pushHistory() {
         if (this.isRestoringHistory) return;
+        
+        // If in a batch, just mark that changes happened (history was pushed at batch start)
+        if (this.batchDepth > 0) {
+            this.batchHadChanges = true;
+            return;
+        }
         
         const map = this.getCurrentMap();
         if (!map) return;
