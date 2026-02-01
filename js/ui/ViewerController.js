@@ -133,10 +133,27 @@ export class ViewerController {
     handleArbitraryPointClick(canvasPos, clickedWaypoint) {
         const state = this.store.getState();
         const hasStart = state.routeStart || this.arbitraryStart;
-        const hasEnd = state.routeEnd || this.arbitraryEnd;
         
-        if (!hasStart) {
-            // Set start point
+        // Check if clicking near current start point (to clear it)
+        const isClickingStart = this.arbitraryStart && 
+            Math.abs(canvasPos.x - this.arbitraryStart.x) < 15 &&
+            Math.abs(canvasPos.y - this.arbitraryStart.y) < 15;
+        
+        // Check if clicking near current end point (to clear just end)
+        const isClickingEnd = this.arbitraryEnd &&
+            Math.abs(canvasPos.x - this.arbitraryEnd.x) < 15 &&
+            Math.abs(canvasPos.y - this.arbitraryEnd.y) < 15;
+        
+        if (isClickingStart) {
+            // Clicking start clears everything
+            this.clearRoute();
+        } else if (isClickingEnd) {
+            // Clicking end clears just the end
+            this.arbitraryEnd = null;
+            this.store.setState({ routeEnd: null });
+            this.clearRouteDisplay();
+        } else if (!hasStart) {
+            // No start - set start point
             if (clickedWaypoint) {
                 this.arbitraryStart = null;
                 this.store.setState({ routeStart: clickedWaypoint.id });
@@ -144,8 +161,8 @@ export class ViewerController {
                 this.arbitraryStart = { x: canvasPos.x, y: canvasPos.y };
                 this.store.setState({ routeStart: null });
             }
-        } else if (!hasEnd) {
-            // Set end point
+        } else {
+            // Has start - set/replace end point (allows repeatedly changing destination)
             if (clickedWaypoint) {
                 this.arbitraryEnd = null;
                 this.store.setState({ routeEnd: clickedWaypoint.id });
@@ -153,9 +170,7 @@ export class ViewerController {
                 this.arbitraryEnd = { x: canvasPos.x, y: canvasPos.y };
                 this.store.setState({ routeEnd: null });
             }
-        } else {
-            // Both set, clicking again clears
-            this.clearRoute();
+            this.clearRouteDisplay(); // Clear old route when changing destination
         }
         
         this.updateFindRouteButton();

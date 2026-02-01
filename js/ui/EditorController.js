@@ -69,6 +69,7 @@ export class EditorController {
         this.isActive = false;
         this.clearEdgeCreation();
         this.renderer.clearGhost();
+        this.renderer.clearBrushPreview();
     }
     
     /**

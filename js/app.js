@@ -174,12 +174,19 @@ class App {
             statusMode.textContent = 'Edit Mode';
             this.editorController.activate();
             this.viewerController.deactivate();
+            
+            // Reset to select tool when entering edit mode
+            this.eventBus.emit('tool:select', 'select');
         } else {
             canvasTools.classList.add('hidden');
             viewControls.classList.remove('hidden');
             statusMode.textContent = 'View Mode';
             this.editorController.deactivate();
             this.viewerController.activate();
+            
+            // Hide any open tool palettes
+            document.getElementById('terrainPalette').classList.add('hidden');
+            document.getElementById('waypointPalette').classList.add('hidden');
         }
         
         // Clear any selection when switching modes
