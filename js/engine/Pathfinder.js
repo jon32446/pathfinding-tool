@@ -223,9 +223,12 @@ export class Pathfinder {
                 
                 if (spurPath) {
                     // Combine root path with spur path
+                    // rootPath includes spurNode, spurPath.path also starts with spurNode
+                    // So we remove spurNode from rootPath to avoid duplication in path array
+                    // But cost and edges should use the full rootPath
                     const totalPath = {
                         path: [...rootPath.slice(0, -1), ...spurPath.path],
-                        cost: this.calculatePathCost(graph, rootPath.slice(0, -1)) + spurPath.cost,
+                        cost: this.calculatePathCost(graph, rootPath) + spurPath.cost,
                         edges: [...this.getPathEdges(graph, rootPath), ...spurPath.edges]
                     };
                     
