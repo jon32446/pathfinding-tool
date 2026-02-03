@@ -224,10 +224,13 @@ export function calculatePathTerrainCost(terrain, points, imageWidth, imageHeigh
         // Distance between points (for weighting)
         const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
         
-        // Sample midpoint terrain
-        const midX = (p1.x + p2.x) / 2;
-        const midY = (p1.y + p2.y) / 2;
-        const cost = getTerrainCostAt(terrain, midX, midY, imageWidth, imageHeight);
+        // Sample midpoint terrain (if no terrain, assume cost 1)
+        let cost = 1;
+        if (terrain) {
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+            cost = getTerrainCostAt(terrain, midX, midY, imageWidth, imageHeight);
+        }
         
         totalCost += dist * cost;
     }

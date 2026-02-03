@@ -147,6 +147,7 @@ export class CanvasRenderer {
         this.eventBus.on('selection:changed', () => this.updateSelection());
         this.eventBus.on('route:changed', () => this.updateSelection());
         this.eventBus.on('terrain:updated', () => this.renderTerrain());
+        this.eventBus.on('scale:updated', () => this.updateStatus());
         
         // Zoom events
         this.eventBus.on('zoom:in', () => this.zoom(ZOOM_STEP));
@@ -853,6 +854,83 @@ export class CanvasRenderer {
     }
     
     /**
+     * Show scale line while drawing
+     * @param {{x: number, y: number}} start 
+     * @param {{x: number, y: number}} end 
+     */
+    showScaleLine(start, end) {
+        this.clearScaleLine();
+        
+        const length = Math.sqrt(
+            Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
+        );
+        
+        const group = createSvgElement('g', { class: 'scale-line-preview' });
+        
+        // Main line
+        group.appendChild(createSvgElement('line', {
+            x1: start.x,
+            y1: start.y,
+            x2: end.x,
+            y2: end.y,
+            stroke: '#3b82f6',
+            'stroke-width': 3,
+            'stroke-linecap': 'round'
+        }));
+        
+        // End caps (perpendicular lines)
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        const capLength = 12;
+        const perpAngle = angle + Math.PI / 2;
+        
+        // Start cap
+        group.appendChild(createSvgElement('line', {
+            x1: start.x + Math.cos(perpAngle) * capLength,
+            y1: start.y + Math.sin(perpAngle) * capLength,
+            x2: start.x - Math.cos(perpAngle) * capLength,
+            y2: start.y - Math.sin(perpAngle) * capLength,
+            stroke: '#3b82f6',
+            'stroke-width': 3,
+            'stroke-linecap': 'round'
+        }));
+        
+        // End cap
+        group.appendChild(createSvgElement('line', {
+            x1: end.x + Math.cos(perpAngle) * capLength,
+            y1: end.y + Math.sin(perpAngle) * capLength,
+            x2: end.x - Math.cos(perpAngle) * capLength,
+            y2: end.y - Math.sin(perpAngle) * capLength,
+            stroke: '#3b82f6',
+            'stroke-width': 3,
+            'stroke-linecap': 'round'
+        }));
+        
+        // Length label
+        const midX = (start.x + end.x) / 2;
+        const midY = (start.y + end.y) / 2;
+        const label = createSvgElement('text', {
+            x: midX,
+            y: midY - 10,
+            fill: '#3b82f6',
+            'font-size': '14',
+            'font-weight': 'bold',
+            'text-anchor': 'middle',
+            'dominant-baseline': 'middle'
+        });
+        label.textContent = `${Math.round(length)} px`;
+        group.appendChild(label);
+        
+        this.svgOverlay.appendChild(group);
+    }
+    
+    /**
+     * Clear scale line preview
+     */
+    clearScaleLine() {
+        this.svgOverlay.querySelectorAll('.scale-line-preview').forEach(el => el.remove());
+    }
+    
+    /**
      * Update selection highlighting
      */
     updateSelection() {
@@ -1029,5 +1107,15 @@ export class CanvasRenderer {
         const map = this.store.getCurrentMap();
         $('statusWaypoints').textContent = `Waypoints: ${map ? map.waypoints.length : 0}`;
         $('statusEdges').textContent = `Edges: ${map ? map.edges.length : 0}`;
+        
+        // Update scale display
+        if (map && map.scale) {
+            $('statusScale').textContent = `Scale: ${map.scale.unitValue} ${map.scale.unitName}`;
+            const costInfo = map.scale.scaleCost ? ` (cost: ${map.scale.scaleCost.toFixed(1)})` : '';
+            $('statusScale').title = `${Math.round(map.scale.pixelLength)} px${costInfo} = ${map.scale.unitValue} ${map.scale.unitName}`;
+        } else {
+            $('statusScale').textContent = 'No scale';
+            $('statusScale').title = 'Use Scale tool (S) to set map scale';
+        }
     }
 }

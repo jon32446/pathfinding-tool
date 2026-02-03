@@ -238,6 +238,15 @@ export class Sidebar {
         const toWp = this.store.getWaypoint(edge.to);
         const map = this.store.getCurrentMap();
         const hasTerrain = map && map.terrain;
+        const hasScale = map && map.scale && map.scale.scaleCost;
+        
+        // Calculate scaled cost if scale is defined
+        let scaledCostDisplay = '';
+        if (hasScale) {
+            const scaledCost = (edge.cost / map.scale.scaleCost) * map.scale.unitValue;
+            const formatted = scaledCost < 10 ? scaledCost.toFixed(1) : Math.round(scaledCost).toString();
+            scaledCostDisplay = `<span class="property-scaled-cost">≈ ${formatted} ${map.scale.unitName}</span>`;
+        }
         
         const panel = $('propertiesPanel');
         panel.innerHTML = `
@@ -258,6 +267,7 @@ export class Sidebar {
                     <label class="property-label">Cost</label>
                     <div class="property-value">
                         <input type="number" id="propEdgeCost" value="${edge.cost}" min="0" step="0.1" ${!edge.costOverride && hasTerrain ? 'disabled' : ''}>
+                        ${scaledCostDisplay}
                     </div>
                 </div>
                 <div class="property-row">

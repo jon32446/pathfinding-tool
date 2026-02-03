@@ -5,6 +5,14 @@
 import { generateId } from '../utils/helpers.js';
 
 /**
+ * @typedef {Object} MapScale
+ * @property {number} pixelLength - Length of the scale line in pixels (for display)
+ * @property {number} scaleCost - Terrain-weighted cost of the scale line (used for conversions)
+ * @property {number} unitValue - What that cost represents in user units
+ * @property {string} unitName - Name of the unit (e.g., "km", "days", "miles")
+ */
+
+/**
  * @typedef {Object} MapData
  * @property {string} id - Unique map identifier
  * @property {string} name - Display name
@@ -14,6 +22,7 @@ import { generateId } from '../utils/helpers.js';
  * @property {import('./Waypoint.js').WaypointData[]} waypoints - Array of waypoints
  * @property {import('./Edge.js').EdgeData[]} edges - Array of edges
  * @property {import('./Terrain.js').TerrainLayer|null} terrain - Terrain layer (null if not painted)
+ * @property {MapScale|null} scale - Scale definition for unit conversion
  * @property {string|null} parentMapId - Parent map ID (for nested maps)
  * @property {number} createdAt - Creation timestamp
  * @property {number} updatedAt - Last update timestamp
@@ -40,6 +49,7 @@ export function createMap({ name, imageData, imageWidth, imageHeight, parentMapI
         waypoints: [],
         edges: [],
         terrain: null,  // Created lazily when user first paints
+        scale: null,    // User-defined scale for unit conversion
         parentMapId,
         createdAt: now,
         updatedAt: now

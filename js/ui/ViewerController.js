@@ -387,11 +387,21 @@ export class ViewerController {
     }
     
     /**
-     * Format cost for display
-     * @param {number} cost 
+     * Format cost for display, using map scale if available
+     * @param {number} cost - Terrain-weighted cost
      * @returns {string}
      */
     formatCost(cost) {
+        const map = this.store.getCurrentMap();
+        
+        if (map && map.scale && map.scale.scaleCost) {
+            // Convert terrain cost to user units using scaleCost
+            const scaledCost = (cost / map.scale.scaleCost) * map.scale.unitValue;
+            const formatted = scaledCost < 10 ? scaledCost.toFixed(1) : Math.round(scaledCost).toString();
+            return `${formatted} ${map.scale.unitName}`;
+        }
+        
+        // No scale - show raw cost
         if (cost < 10) {
             return cost.toFixed(1);
         }

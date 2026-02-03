@@ -136,6 +136,14 @@
                             <path d="M12 11V3a2 2 0 0 1 4 0v2"/>
                         </svg>
                     </button>
+                    <button class="tool-btn" data-tool="scale" title="Set Scale (S)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M2 12h4m12 0h4"/>
+                            <path d="M6 8v8"/>
+                            <path d="M18 8v8"/>
+                            <path d="M9 12h6"/>
+                        </svg>
+                    </button>
                     <div class="tool-divider"></div>
                     <button class="tool-btn" data-tool="pan" title="Pan (Space+Drag)">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -281,6 +289,8 @@
                 <span class="status-divider">|</span>
                 <span class="status-item" id="statusEdges">Edges: 0</span>
                 <span class="status-divider">|</span>
+                <span class="status-item" id="statusScale" title="Map scale">No scale</span>
+                <span class="status-divider">|</span>
                 <span class="status-item" id="statusStorage" title="Data size">--</span>
                 <span class="status-divider">|</span>
                 <span class="status-item" id="statusSaved">
@@ -359,6 +369,30 @@
                 <button class="btn btn-secondary" id="importCancelBtn">Cancel</button>
                 <button class="btn btn-secondary" id="importReplaceBtn">Replace All</button>
                 <button class="btn btn-primary" id="importMergeBtn">Merge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scale Definition Modal -->
+    <div class="modal hidden" id="scaleModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Set Map Scale</h2>
+                <button class="modal-close" id="scaleModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">The line you drew represents how much distance?</p>
+                <div class="form-row scale-inputs">
+                    <input type="number" id="scaleValue" class="form-input scale-value-input" value="1" min="0.01" step="any" placeholder="1">
+                    <input type="text" id="scaleUnit" class="form-input scale-unit-input" placeholder="km, days, miles...">
+                </div>
+                <p class="modal-hint" id="scalePixelInfo">Line length: -- pixels</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="scaleCancelBtn">Cancel</button>
+                <button class="btn btn-danger" id="scaleClearBtn">Clear Scale</button>
+                <button class="btn btn-primary" id="scaleSaveBtn">Save Scale</button>
             </div>
         </div>
     </div>

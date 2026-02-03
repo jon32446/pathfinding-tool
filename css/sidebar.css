@@ -202,6 +202,13 @@
     margin-left: 6px;
 }
 
+.property-scaled-cost {
+    display: block;
+    font-size: 11px;
+    color: var(--color-primary);
+    margin-top: 2px;
+}
+
 /* Property Actions */
 .property-actions {
     display: flex;

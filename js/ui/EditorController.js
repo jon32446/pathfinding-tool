@@ -7,7 +7,7 @@
 
 import { createWaypoint } from '../models/Waypoint.js';
 import { createEdge, edgeExists, convertToBezier, convertToStraight } from '../models/Edge.js';
-import { createTerrainLayer, paintTerrain, imageToGrid, DEFAULT_TERRAIN_TYPES, calculateEdgeTerrainCost } from '../models/Terrain.js';
+import { createTerrainLayer, paintTerrain, imageToGrid, DEFAULT_TERRAIN_TYPES, calculateEdgeTerrainCost, sampleLine, calculatePathTerrainCost } from '../models/Terrain.js';
 import { $, show, hide } from '../utils/dom.js';
 import { distance, distanceToLineSegment, pointInCircle } from '../utils/geometry.js';
 
@@ -42,6 +42,11 @@ export class EditorController {
         this.isPainting = false;
         this.selectedTerrainType = 'clear';
         this.brushSize = 2;
+        
+        // Scale drawing state
+        this.isDrawingScale = false;
+        this.scaleStart = null;
+        this.scaleEnd = null;
     }
     
     /**
@@ -379,6 +384,7 @@ export class EditorController {
             waypoint: 'Add Waypoint (Shift: auto-connect)',
             edge: 'Add Edge',
             paint: 'Paint Terrain',
+            scale: 'Set Scale (drag to draw reference line)',
             pan: 'Pan Tool'
         };
         $('statusTool').textContent = toolNames[tool] || 'Unknown Tool';
@@ -399,6 +405,11 @@ export class EditorController {
         // Clear edge creation when switching tools
         if (tool !== 'edge') {
             this.clearEdgeCreation();
+        }
+        
+        // Clear scale drawing when switching tools
+        if (tool !== 'scale') {
+            this.clearScaleDrawing();
         }
         
         // Clear ghost and brush preview
@@ -442,6 +453,9 @@ export class EditorController {
             case 'paint':
                 this.startPainting(canvasPos, map);
                 break;
+            case 'scale':
+                this.startScaleDrawing(canvasPos);
+                break;
         }
     }
     
@@ -458,6 +472,12 @@ export class EditorController {
         // Handle terrain painting
         if (this.isPainting) {
             this.continuePainting(canvasPos);
+            return;
+        }
+        
+        // Handle scale line drawing
+        if (this.isDrawingScale && this.scaleStart) {
+            this.updateScaleDrawing(canvasPos);
             return;
         }
         
@@ -496,6 +516,10 @@ export class EditorController {
     handleMouseUp(e) {
         if (this.isPainting) {
             this.stopPainting();
+        }
+        
+        if (this.isDrawingScale) {
+            this.finishScaleDrawing();
         }
         
         if (this.isDragging) {
@@ -1151,5 +1175,194 @@ export class EditorController {
         );
         
         this.store.setTerrain(newTerrain);
+    }
+    
+    // =====================
+    // Scale Tool Methods
+    // =====================
+    
+    /**
+     * Start drawing scale line
+     * @param {{x: number, y: number}} canvasPos 
+     */
+    startScaleDrawing(canvasPos) {
+        this.isDrawingScale = true;
+        this.scaleStart = { x: canvasPos.x, y: canvasPos.y };
+        this.scaleEnd = null;
+    }
+    
+    /**
+     * Update scale line drawing
+     * @param {{x: number, y: number}} canvasPos 
+     */
+    updateScaleDrawing(canvasPos) {
+        this.scaleEnd = { x: canvasPos.x, y: canvasPos.y };
+        this.renderer.showScaleLine(this.scaleStart, this.scaleEnd);
+    }
+    
+    /**
+     * Finish scale line drawing and show modal
+     */
+    finishScaleDrawing() {
+        if (!this.scaleStart || !this.scaleEnd) {
+            this.clearScaleDrawing();
+            return;
+        }
+        
+        const pixelLength = Math.sqrt(
+            Math.pow(this.scaleEnd.x - this.scaleStart.x, 2) +
+            Math.pow(this.scaleEnd.y - this.scaleStart.y, 2)
+        );
+        
+        // Require a minimum length
+        if (pixelLength < 10) {
+            this.clearScaleDrawing();
+            return;
+        }
+        
+        // Calculate the terrain-weighted cost of the scale line
+        // Uses cost 1 for unpainted areas (or if no terrain layer exists)
+        const map = this.store.getCurrentMap();
+        const points = sampleLine(
+            this.scaleStart.x, this.scaleStart.y,
+            this.scaleEnd.x, this.scaleEnd.y,
+            20
+        );
+        const scaleCost = calculatePathTerrainCost(
+            map?.terrain || null, points,
+            map?.imageWidth || 1, map?.imageHeight || 1
+        );
+        
+        this.isDrawingScale = false;
+        
+        // Show the scale modal
+        this.showScaleModal(pixelLength, scaleCost);
+    }
+    
+    /**
+     * Clear scale drawing state
+     */
+    clearScaleDrawing() {
+        this.isDrawingScale = false;
+        this.scaleStart = null;
+        this.scaleEnd = null;
+        this.renderer.clearScaleLine();
+    }
+    
+    /**
+     * Show the scale definition modal
+     * @param {number} pixelLength 
+     * @param {number} scaleCost - Terrain-weighted cost of the scale line
+     */
+    showScaleModal(pixelLength, scaleCost) {
+        const modal = $('scaleModal');
+        const map = this.store.getCurrentMap();
+        
+        // Pre-fill with existing scale if present
+        if (map && map.scale) {
+            $('scaleValue').value = map.scale.unitValue;
+            $('scaleUnit').value = map.scale.unitName;
+        } else {
+            $('scaleValue').value = '1';
+            $('scaleUnit').value = '';
+        }
+        
+        $('scalePixelInfo').textContent = `Line length: ${Math.round(pixelLength)} pixels (cost: ${scaleCost.toFixed(1)})`;
+        
+        // Store values for save
+        modal.dataset.pixelLength = pixelLength;
+        modal.dataset.scaleCost = scaleCost;
+        
+        show(modal);
+        $('scaleUnit').focus();
+        
+        // Set up modal handlers (only once)
+        if (!modal.dataset.initialized) {
+            modal.dataset.initialized = 'true';
+            
+            $('scaleModalClose').addEventListener('click', () => this.closeScaleModal());
+            $('scaleCancelBtn').addEventListener('click', () => this.closeScaleModal());
+            $('scaleClearBtn').addEventListener('click', () => this.clearMapScale());
+            $('scaleSaveBtn').addEventListener('click', () => this.saveMapScale());
+            
+            // Close on backdrop click
+            modal.querySelector('.modal-backdrop').addEventListener('click', () => this.closeScaleModal());
+            
+            // Enter key saves
+            modal.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.saveMapScale();
+                } else if (e.key === 'Escape') {
+                    this.closeScaleModal();
+                }
+            });
+        }
+    }
+    
+    /**
+     * Close scale modal
+     */
+    closeScaleModal() {
+        hide($('scaleModal'));
+        this.clearScaleDrawing();
+    }
+    
+    /**
+     * Save the map scale
+     */
+    saveMapScale() {
+        const modal = $('scaleModal');
+        const pixelLength = parseFloat(modal.dataset.pixelLength);
+        const scaleCost = parseFloat(modal.dataset.scaleCost);
+        const unitValue = parseFloat($('scaleValue').value);
+        const unitName = $('scaleUnit').value.trim();
+        
+        if (!unitValue || unitValue <= 0) {
+            alert('Please enter a valid number for the distance.');
+            return;
+        }
+        
+        if (!unitName) {
+            alert('Please enter a unit name (e.g., km, days, miles).');
+            return;
+        }
+        
+        const map = this.store.getCurrentMap();
+        if (!map) return;
+        
+        // Save scale to map (scaleCost is what we use for conversions)
+        const updatedMap = {
+            ...map,
+            scale: {
+                pixelLength,  // For display purposes
+                scaleCost,    // Terrain-weighted cost - used for conversions
+                unitValue,
+                unitName
+            }
+        };
+        
+        this.store.setMap(updatedMap);
+        this.eventBus.emit('scale:updated', updatedMap.scale);
+        
+        this.closeScaleModal();
+    }
+    
+    /**
+     * Clear the map scale
+     */
+    clearMapScale() {
+        const map = this.store.getCurrentMap();
+        if (!map) return;
+        
+        const updatedMap = {
+            ...map,
+            scale: null
+        };
+        
+        this.store.setMap(updatedMap);
+        this.eventBus.emit('scale:updated', null);
+        
+        this.closeScaleModal();
     }
 }

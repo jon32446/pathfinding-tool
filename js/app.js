@@ -260,6 +260,9 @@ class App {
                 case 't':
                     this.eventBus.emit('tool:select', 'paint');
                     break;
+                case 's':
+                    this.eventBus.emit('tool:select', 'scale');
+                    break;
             }
         }
         
